@@ -1,0 +1,325 @@
+// ClientConnect Portal — Prisma schema
+// See docs/01-data-model.md for rationale, ERD, and cascade policy.
+// REVIEW fixes baked in:
+//   - User.tokenVersion (REVIEW-2.md §3.3) — invalidates JWTs on role change
+//   - User.unreadNotifications (docs/14-notifications.md) — denormalized badge count
+//   - Session model (docs/02-authentication.md) — refresh-token revocation
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Users & Auth
+// ─────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  role          UserRole
+  name          String
+
+  // Bumped on role change or force-logout. Embedded in access token;
+  // DAL rejects tokens with stale versions. (REVIEW-2.md §3.3)
+  tokenVersion  Int      @default(0)
+
+  // Denormalized for cheap navbar-badge reads. (docs/14-notifications.md)
+  unreadNotifications  Int       @default(0)
+  lastNotificationSeenAt DateTime?
+
+  // Optional 1:1 profile relations
+  client        Client?
+  teamMember    TeamMember?
+
+  // Relations
+  comments      Comment[]      @relation("CommentAuthor")
+  auditLogs     AuditLog[]
+  sessions      Session[]
+  notifications Notification[]
+  uploadedFiles File[]        @relation("FileUploader")
+
+  lastLoginAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([role])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  TEAM_MEMBER
+  CLIENT
+}
+
+model Session {
+  // For refresh-token rotation + revocation. Access tokens are stateless;
+  // refresh tokens are looked up here on each /refresh.
+  id                String    @id @default(cuid())
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokenHash  String    @unique
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  ip                String?
+  userAgent         String?
+  createdAt         DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Invites  (pre-registration; consumed at sign-up)
+// ─────────────────────────────────────────────────────────────────
+
+model Invite {
+  id           String      @id @default(cuid())
+  email        String
+  companyName  String
+  contactName  String
+  slug         String      @unique
+  createdBy    String
+  status       InviteStatus @default(OPEN)
+  consumedBy   String?
+  expiresAt    DateTime
+  createdAt    DateTime    @default(now())
+
+  client       Client?
+
+  @@index([status])
+  @@index([email])
+}
+
+enum InviteStatus {
+  OPEN
+  CONSUMED
+  REVOKED
+  EXPIRED
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Clients & Team
+// ─────────────────────────────────────────────────────────────────
+
+model Client {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inviteId      String?          @unique
+  invite        Invite?          @relation(fields: [inviteId], references: [id], onDelete: SetNull)
+
+  companyName   String
+  contactName   String
+  uniqueSlug    String           @unique
+
+  projectBrief  String?
+  budget        String?
+  timeline      String?
+
+  submissions   Submission[]
+  comments      Comment[]
+  files         File[]           @relation("ClientFiles")
+  assignments   TeamAssignment[]
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@index([uniqueSlug])
+}
+
+model TeamMember {
+  id            String           @id @default(cuid())
+  userId        String           @unique
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department    String?
+  assignments   TeamAssignment[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+}
+
+model TeamAssignment {
+  id            String     @id @default(cuid())
+  teamMemberId  String
+  teamMember    TeamMember @relation(fields: [teamMemberId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedAt    DateTime   @default(now())
+
+  @@unique([teamMemberId, clientId])
+  @@index([clientId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Forms & Submissions
+// ─────────────────────────────────────────────────────────────────
+
+model Form {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  formSchema    Json
+  isActive      Boolean      @default(true)
+  submissions   Submission[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([isActive])
+}
+
+enum SubmissionStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model Submission {
+  id            String           @id @default(cuid())
+  clientId      String
+  client        Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  formId        String
+  form          Form             @relation(fields: [formId], references: [id])
+  formData      Json
+  status        SubmissionStatus @default(DRAFT)
+
+  files         File[]
+  comments      Comment[]
+
+  submittedAt   DateTime?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  @@unique([clientId, formId])
+  @@index([status])
+  @@index([formId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Files
+// ─────────────────────────────────────────────────────────────────
+
+model File {
+  id            String       @id @default(cuid())
+  submissionId  String?
+  submission    Submission?  @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  clientId      String
+  client        Client       @relation("ClientFiles", fields: [clientId], references: [id], onDelete: Cascade)
+
+  storageKey    String
+  originalName  String
+  mimeType      String
+  size          BigInt
+  checksum      String
+  uploadedById  String
+  uploadedBy    User         @relation("FileUploader", fields: [uploadedById], references: [id])
+
+  uploadedAt    DateTime     @default(now())
+
+  @@index([submissionId])
+  @@index([clientId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Comments
+// ─────────────────────────────────────────────────────────────────
+
+model Comment {
+  id            String      @id @default(cuid())
+  clientId      String
+  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        User        @relation("CommentAuthor", fields: [authorId], references: [id])
+
+  submissionId  String?
+  submission    Submission? @relation(fields: [submissionId], references: [id], onDelete: SetNull)
+
+  message       String
+  isInternal    Boolean     @default(false)
+
+  parentId      String?
+  parent        Comment?    @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies       Comment[]   @relation("CommentReplies")
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([clientId, createdAt])
+  @@index([submissionId])
+  @@index([authorId])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Notifications  (docs/14-notifications.md)
+// ─────────────────────────────────────────────────────────────────
+
+model Notification {
+  id            String           @id @default(cuid())
+  recipientId   String
+  recipient     User             @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  type          NotificationType
+  clientId      String?
+  submissionId  String?
+  commentId     String?
+  title         String
+  body          String
+  href          String
+  payload       Json?
+  readAt        DateTime?
+  emailedAt     DateTime?
+  createdAt     DateTime         @default(now())
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([recipientId, createdAt])
+}
+
+enum NotificationType {
+  INVITE_CREATED
+  INVITE_CONSUMED
+  INVITE_EXPIRED
+  SUBMISSION_DRAFTED
+  SUBMISSION_SUBMITTED
+  SUBMISSION_IN_REVIEW
+  SUBMISSION_CHANGES_REQUESTED
+  SUBMISSION_APPROVED
+  SUBMISSION_REJECTED
+  COMMENT_POSTED_EXTERNAL
+  COMMENT_POSTED_EXTERNAL_BY_CLIENT
+  COMMENT_POSTED_INTERNAL
+  COMMENT_REPLY
+  FILE_UPLOADED_CLIENT
+  FILE_UPLOADED_TEAM
+  TEAM_MEMBER_ASSIGNED
+  SYSTEM_ERROR
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Audit Log  (append-only; tamper-evidence comes in REVIEW-4.md §6.1)
+// ─────────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action      String
+  resource    String
+  resourceId  String
+  changes     Json?
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+}

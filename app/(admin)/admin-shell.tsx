@@ -1,0 +1,67 @@
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { NotificationsBell } from '@/components/notifications/notifications-bell'
+import { logoutAction } from '@/app/(auth)/logout/actions'
+
+const NAV = [
+  { href: '/admin', label: 'Dashboard' },
+  { href: '/admin/invites', label: 'Invites' },
+  { href: '/admin/clients', label: 'Clients' },
+  { href: '/admin/forms', label: 'Forms' },
+  { href: '/admin/team', label: 'Team' },
+  { href: '/admin/settings', label: 'Settings' },
+]
+
+export function AdminShell({
+  user,
+  children,
+}: {
+  user: { email: string; name: string | null }
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  return (
+    <div className="min-h-screen flex bg-background">
+      <aside className="w-56 border-r bg-muted/30 p-4 flex flex-col">
+        <div className="px-2 py-3 mb-2">
+          <div className="font-semibold leading-tight">ClientConnect</div>
+          <div className="text-xs text-muted-foreground">Admin</div>
+        </div>
+        <nav className="space-y-1 flex-1">
+          {NAV.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(item.href + '/')
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={
+                  'block px-3 py-2 rounded-md text-sm transition-colors ' +
+                  (active
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted text-foreground/80')
+                }
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+        <div className="pt-4 mt-4 border-t space-y-2">
+          <div className="flex items-center justify-between px-2">
+            <span className="text-xs text-muted-foreground truncate flex-1">{user.email}</span>
+            <NotificationsBell enabled />
+          </div>
+          <form action={logoutAction}>
+            <Button type="submit" variant="outline" size="sm" className="w-full">
+              Sign out
+            </Button>
+          </form>
+        </div>
+      </aside>
+      <main className="flex-1 p-8 overflow-x-auto">{children}</main>
+    </div>
+  )
+}

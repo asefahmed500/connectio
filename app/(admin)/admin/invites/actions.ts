@@ -1,0 +1,78 @@
+'use server'
+
+import { z } from 'zod'
+import { revalidatePath } from 'next/cache'
+import { requireRole } from '@/lib/dal/session'
+import { proposeSlug } from '@/lib/dal/invites'
+import { prisma } from '@/lib/db'
+import { writeAudit } from '@/lib/audit'
+
+const CreateSchema = z.object({
+  email: z.email(),
+  companyName: z.string().min(1).max(120),
+  contactName: z.string().min(1).max(120),
+})
+
+export type CreateInviteState =
+  | undefined
+  | { error: string }
+  | { success: true; slug: string; inviteLink: string }
+
+export async function createInviteAction(
+  _prev: CreateInviteState,
+  formData: FormData,
+): Promise<CreateInviteState> {
+  const user = await requireRole('SUPER_ADMIN')
+  const parsed = CreateSchema.safeParse({
+    email: formData.get('email'),
+    companyName: formData.get('companyName'),
+    contactName: formData.get('contactName'),
+  })
+  if (!parsed.success) return { error: 'Please fill all fields correctly.' }
+
+  const slug = await proposeSlug(parsed.data)
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+  const invite = await prisma.invite.create({
+    data: {
+      email: parsed.data.email.toLowerCase(),
+      companyName: parsed.data.companyName,
+      contactName: parsed.data.contactName,
+      slug,
+      createdBy: user.id,
+      expiresAt,
+    },
+  })
+
+  await writeAudit({
+    action: 'INVITE_CREATED',
+    userId: user.id,
+    resource: 'Invite',
+    resourceId: invite.id,
+  })
+
+  revalidatePath('/admin/invites')
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? ''
+  return { success: true, slug: invite.slug, inviteLink: `${base}/invite/${invite.slug}` }
+}
+
+export async function revokeInviteAction(slug: string): Promise<void> {
+  const user = await requireRole('SUPER_ADMIN')
+  const invite = await prisma.invite.findUnique({ where: { slug } })
+  if (!invite) return
+  if (invite.status !== 'OPEN') return
+
+  await prisma.invite.update({
+    where: { id: invite.id },
+    data: { status: 'REVOKED' },
+  })
+
+  await writeAudit({
+    action: 'INVITE_REVOKED',
+    userId: user.id,
+    resource: 'Invite',
+    resourceId: invite.id,
+  })
+
+  revalidatePath('/admin/invites')
+}

@@ -1,0 +1,35 @@
+// Discriminated union of every notification event. The audience rules in
+// audience.ts switch on `event.type`; adding a new event means updating:
+//   1. NotificationType enum in prisma/schema.prisma
+//   2. This union
+//   3. audience.ts computeRecipients
+//   4. templates.ts renderTemplate
+
+import type { UserRole, NotificationType } from '@prisma/client'
+
+export type { NotificationType, UserRole }
+
+export type NotificationEvent =
+  | { type: 'INVITE_CONSUMED'; actorId: string; clientId: string; inviteCreatedBy: string; companyName: string }
+  | { type: 'SUBMISSION_SUBMITTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
+  | { type: 'SUBMISSION_IN_REVIEW'; actorId: string; clientId: string; submissionId: string; formTitle: string }
+  | { type: 'SUBMISSION_CHANGES_REQUESTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
+  | { type: 'SUBMISSION_APPROVED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
+  | { type: 'SUBMISSION_REJECTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
+  | { type: 'COMMENT_POSTED_EXTERNAL'; actorId: string; clientId: string; commentId: string; submissionId?: string; messagePreview: string }
+  | { type: 'COMMENT_POSTED_EXTERNAL_BY_CLIENT'; actorId: string; clientId: string; commentId: string; submissionId?: string; messagePreview: string }
+  | { type: 'COMMENT_POSTED_INTERNAL'; actorId: string; clientId: string; commentId: string; submissionId?: string; messagePreview: string }
+  | { type: 'COMMENT_REPLY'; actorId: string; clientId: string; commentId: string; parentAuthorId: string; messagePreview: string }
+  | { type: 'FILE_UPLOADED_CLIENT'; actorId: string; clientId: string; fileName: string }
+  | { type: 'FILE_UPLOADED_TEAM'; actorId: string; clientId: string; fileName: string }
+  | { type: 'TEAM_MEMBER_ASSIGNED'; actorId: string; clientId: string; teamMemberUserId: string; companyName: string }
+
+export type NotificationDTO = {
+  id: string
+  type: NotificationType
+  title: string
+  body: string
+  href: string
+  readAt: string | null
+  createdAt: string
+}
