@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
 import { requireClientAccess, getCurrentUser } from '@/lib/dal/session'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 
 export type FileDTO = {
   id: string
@@ -39,17 +40,30 @@ function toDTO(f: {
   }
 }
 
-export async function listFilesForClient(clientId: string): Promise<FileDTO[]> {
+export async function listFilesForClient(
+  clientId: string,
+  params?: PaginationParams,
+): Promise<PaginatedResult<FileDTO>> {
   await requireClientAccess(clientId)
-  const rows = await prisma.file.findMany({
-    where: { clientId },
-    orderBy: { uploadedAt: 'desc' },
-  })
-  return rows.map(toDTO)
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.file.findMany({
+      where: { clientId, deletedAt: null },
+      orderBy: { uploadedAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.file.count({
+      where: { clientId, deletedAt: null },
+    }),
+  ])
+
+  return toPaginated(rows.map(toDTO), total, params)
 }
 
 export const getFileDTO = cache(async (fileId: string): Promise<FileDTO | null> => {
-  const f = await prisma.file.findUnique({ where: { id: fileId } })
+  const f = await prisma.file.findUnique({ where: { id: fileId, deletedAt: null } })
   if (!f) return null
   await requireClientAccess(f.clientId)
   return toDTO(f)
@@ -80,15 +94,11 @@ export async function deleteFile(fileId: string): Promise<void> {
 
   if (!canDelete) throw new Error('Not allowed to delete this file')
 
-  // REVIEW-3.md §3.5 fix: delete storage BEFORE the row. If storage delete
-  // succeeds and the DB delete fails, the row points at a missing object —
-  // catch on next read and offer re-upload. (Reverse order: orphan row if
-  // storage delete fails. We choose the former because storage is cheaper
-  // to re-upload than to lose.)
-  const { getStorage } = await import('@/lib/storage')
-  const storage = getStorage()
-  await storage.delete(file.storageKey)
-  await prisma.file.delete({ where: { id: fileId } })
+  // Soft-delete the row — keep storage object for potential recovery.
+  await prisma.file.update({
+    where: { id: fileId },
+    data: { deletedAt: new Date() },
+  })
 
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({

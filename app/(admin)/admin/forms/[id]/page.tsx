@@ -17,7 +17,7 @@ export default async function EditFormPage({
   if (!form) notFound()
 
   const submissions = await prisma.submission.findMany({
-    where: { formId: id },
+    where: { formId: id, deletedAt: null },
     include: { client: { select: { companyName: true, uniqueSlug: true } } },
     orderBy: { updatedAt: 'desc' },
     take: 20,

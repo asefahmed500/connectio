@@ -22,9 +22,9 @@ export default async function TeamClientDetailPage({
     notFound()
   }
 
-  const client = await prisma.client.findUniqueOrThrow({ where: { id } })
+  const client = await prisma.client.findUniqueOrThrow({ where: { id, deletedAt: null } })
   const submissions = await prisma.submission.findMany({
-    where: { clientId: id },
+    where: { clientId: id, deletedAt: null },
     include: { form: { select: { title: true, formSchema: true } } },
     orderBy: { updatedAt: 'desc' },
   })

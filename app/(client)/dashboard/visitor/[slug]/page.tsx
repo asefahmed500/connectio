@@ -13,12 +13,12 @@ export default async function ClientDashboard({
 
   const [submissions, comments] = await Promise.all([
     prisma.submission.findMany({
-      where: { clientId },
+      where: { clientId, deletedAt: null },
       include: { form: { select: { title: true } } },
       orderBy: { updatedAt: 'desc' },
     }),
     prisma.comment.count({
-      where: { clientId, isInternal: false },
+      where: { clientId, isInternal: false, deletedAt: null },
     }),
   ])
 

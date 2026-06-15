@@ -1,33 +1,52 @@
 'use client'
 
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Field, FieldLabel, FieldError } from '@/components/ui/field'
 import { createInviteAction } from './actions'
+
+const schema = z.object({
+  email: z.string().min(1, 'Email is required').email('Enter a valid email'),
+  companyName: z.string().min(1, 'Company is required').max(120),
+  contactName: z.string().min(1, 'Contact name is required').max(120),
+})
+
+type Schema = z.infer<typeof schema>
 
 export function CreateInviteForm() {
   const [state, action, pending] = useActionState(createInviteAction, undefined)
 
+  const { register, formState: { errors } } = useForm<Schema>({
+    resolver: zodResolver(schema),
+    defaultValues: { email: '', companyName: '', contactName: '' },
+  })
+
   return (
-    <form action={action} className="border rounded-lg p-4 space-y-3">
+    <form action={action} noValidate className="border rounded-lg p-4 flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="email">Client email</Label>
-          <Input id="email" name="email" type="email" required placeholder="jane@acme.com" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="companyName">Company</Label>
-          <Input id="companyName" name="companyName" required placeholder="Acme Corp" />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="contactName">Contact name</Label>
-          <Input id="contactName" name="contactName" required placeholder="Jane Smith" />
-        </div>
+        <Field data-invalid={!!errors.email}>
+          <FieldLabel htmlFor="email">Client email</FieldLabel>
+          <Input id="email" type="email" placeholder="jane@acme.com" aria-invalid={!!errors.email} {...register('email')} />
+          {errors.email && <FieldError errors={[errors.email]} />}
+        </Field>
+        <Field data-invalid={!!errors.companyName}>
+          <FieldLabel htmlFor="companyName">Company</FieldLabel>
+          <Input id="companyName" placeholder="Acme Corp" aria-invalid={!!errors.companyName} {...register('companyName')} />
+          {errors.companyName && <FieldError errors={[errors.companyName]} />}
+        </Field>
+        <Field data-invalid={!!errors.contactName}>
+          <FieldLabel htmlFor="contactName">Contact name</FieldLabel>
+          <Input id="contactName" placeholder="Jane Smith" aria-invalid={!!errors.contactName} {...register('contactName')} />
+          {errors.contactName && <FieldError errors={[errors.contactName]} />}
+        </Field>
       </div>
-      {state && 'error' in state && <p className="text-sm text-destructive">{state.error}</p>}
+      {state && 'error' in state && <p className="text-sm text-destructive" role="alert">{state.error}</p>}
       {state && 'success' in state && (
-        <div className="text-sm space-y-1 bg-muted/50 rounded p-3">
+        <div className="text-sm flex flex-col gap-1 bg-muted/50 rounded p-3">
           <div className="font-medium text-emerald-700 dark:text-emerald-400">Invite created</div>
           <div>
             Share this link with the client:{' '}

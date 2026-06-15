@@ -67,7 +67,7 @@ export function SubmissionForm({
         </div>
       )}
 
-      <form action={formAction} className="space-y-5">
+      <form action={formAction} className="space-y-5" noValidate>
         <input type="hidden" name="submissionId" value={submissionId} />
         <input type="hidden" name="clientId" value={clientId} />
         <input type="hidden" name="formId" value={formId} />

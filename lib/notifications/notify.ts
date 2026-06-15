@@ -18,7 +18,6 @@ export async function notify(event: NotificationEvent): Promise<void> {
   if (recipientIds.length === 0) return
 
   const tpl = renderTemplate(event)
-  const now = new Date()
 
   await prisma.$transaction(async (tx) => {
     await tx.notification.createMany({
@@ -41,20 +40,35 @@ export async function notify(event: NotificationEvent): Promise<void> {
     })
   })
 
-  // Email side-channel — fire and forget. When the email milestone lands
-  // this becomes after() + lib/email.
+  // Email side-channel — fire and forget. Actual delivery via SMTP adapter.
   if (tpl.emailByDefault) {
-    void sendEmails(event, recipientIds).catch((err) => {
+    void sendNotificationEmails(event, recipientIds).catch((err) => {
       console.error('[notify] email batch failed:', err)
     })
   }
 }
 
-async function sendEmails(_event: NotificationEvent, _recipientIds: string[]) {
-  // Stub: replaced by the email adapter in a later milestone. In dev this
-  // would log to console; in prod it would enqueue via the outbox.
-  if (process.env.NODE_ENV !== 'production') {
-    // eslint-disable-next-line no-console
-    console.log(`[email stub] would notify ${_recipientIds.length} recipient(s) of ${_event.type}`)
+async function sendNotificationEmails(event: NotificationEvent, recipientIds: string[]) {
+  const { sendNotificationEmail } = await import('@/lib/email')
+  const tpl = renderTemplate(event)
+
+  // Fetch recipient emails in one query.
+  const { prisma } = await import('@/lib/db')
+  const users = await prisma.user.findMany({
+    where: { id: { in: recipientIds } },
+    select: { email: true },
+  })
+
+  for (const user of users) {
+    try {
+      await sendNotificationEmail({
+        to: user.email,
+        title: tpl.title,
+        body: tpl.body,
+        href: tpl.href,
+      })
+    } catch {
+      // Individual email failures shouldn't block others.
+    }
   }
 }

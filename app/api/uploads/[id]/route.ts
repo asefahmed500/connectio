@@ -56,17 +56,18 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params
-  const file = await prisma.file.findUnique({ where: { id } })
-  if (!file) return new NextResponse(null, { status: 204 })
-
   try {
+    const { id } = await params
+    const file = await prisma.file.findUnique({ where: { id, deletedAt: null } })
+    if (!file) return new NextResponse(null, { status: 204 })
+
     await deleteFile(id)
+    return new NextResponse(null, { status: 204 })
   } catch (err) {
+    console.error('[uploads] delete failed:', err)
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Delete failed' },
       { status: 403 },
     )
   }
-  return new NextResponse(null, { status: 204 })
 }

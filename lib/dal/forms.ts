@@ -3,6 +3,8 @@ import { cache } from 'react'
 import { prisma } from '@/lib/db'
 import { requireRole, requireClientAccess } from '@/lib/dal/session'
 import { FormSchemaV1, parseFormSchema } from '@/lib/forms/schema'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
+import { NotFoundError } from '@/lib/errors'
 
 export type FormSummary = {
   id: string
@@ -15,13 +17,41 @@ export type FormSummary = {
   updatedAt: Date
 }
 
-export async function listAllForms(): Promise<FormSummary[]> {
+import type { SubmissionStatus } from '@prisma/client'
+
+export type ActiveFormSummary = {
+  id: string
+  title: string
+  description: string | null
+  isActive: boolean
+  fieldCount: number
+  submission: {
+    id: string
+    status: SubmissionStatus
+    updatedAt: Date
+  } | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+export async function listAllForms(params?: PaginationParams): Promise<PaginatedResult<FormSummary>> {
   await requireRole('SUPER_ADMIN')
-  const forms = await prisma.form.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { submissions: true } } },
-  })
-  return forms.map((f) => ({
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.form.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: { _count: { select: { submissions: true } } },
+      take,
+      skip,
+    }),
+    prisma.form.count({
+      where: { deletedAt: null },
+    }),
+  ])
+
+  const items = rows.map((f) => ({
     id: f.id,
     title: f.title,
     description: f.description,
@@ -31,17 +61,20 @@ export async function listAllForms(): Promise<FormSummary[]> {
     createdAt: f.createdAt,
     updatedAt: f.updatedAt,
   }))
+
+  return toPaginated(items, total, params)
 }
 
-export async function listActiveFormsForClient(clientId: string): Promise<FormSummary[]> {
+export async function listActiveFormsForClient(clientId: string): Promise<ActiveFormSummary[]> {
   await requireClientAccess(clientId)
   const forms = await prisma.form.findMany({
-    where: { isActive: true },
+    where: { isActive: true, deletedAt: null },
     orderBy: { createdAt: 'asc' },
     include: {
       submissions: {
-        where: { clientId },
+        where: { clientId, deletedAt: null },
         select: { id: true, status: true, updatedAt: true },
+        take: 1,
       },
     },
   })
@@ -51,7 +84,7 @@ export async function listActiveFormsForClient(clientId: string): Promise<FormSu
     description: f.description,
     isActive: f.isActive,
     fieldCount: (parseFormSchema(f.formSchema as unknown).fields.length),
-    submissionCount: f.submissions.length,
+    submission: f.submissions[0] ?? null,
     createdAt: f.createdAt,
     updatedAt: f.updatedAt,
   }))
@@ -59,7 +92,7 @@ export async function listActiveFormsForClient(clientId: string): Promise<FormSu
 
 export const getFormDTO = cache(async (formId: string) => {
   await requireRole('SUPER_ADMIN', 'TEAM_MEMBER')
-  const form = await prisma.form.findUniqueOrThrow({ where: { id: formId } })
+  const form = await prisma.form.findFirstOrThrow({ where: { id: formId, deletedAt: null } })
   return {
     id: form.id,
     title: form.title,
@@ -99,6 +132,11 @@ export async function updateForm(
   },
 ): Promise<void> {
   const user = await requireRole('SUPER_ADMIN')
+
+  // Check form exists and is not soft-deleted before updating.
+  const form = await prisma.form.findFirst({ where: { id, deletedAt: null } })
+  if (!form) throw new NotFoundError('Form')
+
   await prisma.form.update({
     where: { id },
     data: {

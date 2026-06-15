@@ -13,6 +13,7 @@ export async function getStatusBreakdown(): Promise<StatusBreakdown> {
   await requireRole('SUPER_ADMIN')
   const grouped = await prisma.submission.groupBy({
     by: ['status'],
+    where: { deletedAt: null },
     _count: { _all: true },
   })
   const empty: StatusBreakdown = {
@@ -37,7 +38,7 @@ export async function getSubmissionTrend(days = 14): Promise<DayBucket[]> {
 
   const [submissions, clientCreates] = await Promise.all([
     prisma.submission.findMany({
-      where: { submittedAt: { gte: since } },
+      where: { submittedAt: { gte: since }, deletedAt: null },
       select: { submittedAt: true },
     }),
     prisma.client.findMany({
@@ -61,7 +62,8 @@ export async function getSubmissionTrend(days = 14): Promise<DayBucket[]> {
   for (const s of submissions) {
     if (!s.submittedAt) continue
     const key = s.submittedAt.toISOString().slice(0, 10)
-    byDate.get(key)?.count != null && (byDate.get(key)!.count += 1)
+    const bucket = byDate.get(key)
+    if (bucket) bucket.count += 1
   }
   return buckets
 }
@@ -88,27 +90,34 @@ export type ActivityItem = {
 export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
   await requireRole('SUPER_ADMIN')
 
+  // Proportional split to avoid feed bias (e.g. 7 submissions, 5 comments, 3 files for limit = 15)
+  const subLimit = Math.floor(limit / 2)
+  const commentLimit = Math.floor(limit / 3)
+  const fileLimit = Math.max(1, limit - subLimit - commentLimit)
+
   const [subs, comments, files] = await Promise.all([
     prisma.submission.findMany({
-      take: limit,
+      take: subLimit,
       orderBy: { updatedAt: 'desc' },
-      where: { status: { not: 'DRAFT' } },
+      where: { status: { not: 'DRAFT' }, deletedAt: null },
       include: {
         client: { select: { id: true, companyName: true } },
         form: { select: { title: true } },
       },
     }),
     prisma.comment.findMany({
-      take: limit,
+      take: commentLimit,
       orderBy: { createdAt: 'desc' },
+      where: { deletedAt: null },
       include: {
         client: { select: { id: true, companyName: true } },
         author: { select: { name: true, role: true } },
       },
     }),
     prisma.file.findMany({
-      take: limit,
+      take: fileLimit,
       orderBy: { uploadedAt: 'desc' },
+      where: { deletedAt: null },
       include: { client: { select: { id: true, companyName: true } } },
     }),
   ])
@@ -159,25 +168,43 @@ export type TopClient = {
 
 export async function getTopClientsByActivity(limit = 5): Promise<TopClient[]> {
   await requireRole('SUPER_ADMIN')
-  const clients = await prisma.client.findMany({
-    include: {
-      _count: { select: { submissions: true, comments: true, files: true } },
-    },
-  })
-  return clients
-    .map<TopClient>((c) => ({
-      id: c.id,
-      companyName: c.companyName,
-      uniqueSlug: c.uniqueSlug,
-      submissions: c._count.submissions,
-      comments: c._count.comments,
-      files: c._count.files,
-      // Weighted: submissions count heaviest (they're the primary signal of
-      // engagement), comments next, files least. Tunable.
-      activityScore: c._count.submissions * 3 + c._count.comments + c._count.files,
-    }))
-    .sort((a, b) => b.activityScore - a.activityScore)
-    .slice(0, limit)
+
+  const rows = await prisma.$queryRaw<Array<{
+    id: string
+    companyName: string
+    uniqueSlug: string
+    submissions: number
+    comments: number
+    files: number
+    activityScore: number
+  }>>`
+    SELECT
+      c.id,
+      c."companyName",
+      c."uniqueSlug",
+      CAST(COUNT(DISTINCT s.id) AS INTEGER) as submissions,
+      CAST(COUNT(DISTINCT cm.id) AS INTEGER) as comments,
+      CAST(COUNT(DISTINCT f.id) AS INTEGER) as files,
+      CAST((COUNT(DISTINCT s.id) * 3 + COUNT(DISTINCT cm.id) + COUNT(DISTINCT f.id)) AS INTEGER) as "activityScore"
+    FROM "Client" c
+    LEFT JOIN "Submission" s ON s."clientId" = c.id AND s."deletedAt" IS NULL
+    LEFT JOIN "Comment" cm ON cm."clientId" = c.id AND cm."deletedAt" IS NULL
+    LEFT JOIN "File" f ON f."clientId" = c.id AND f."deletedAt" IS NULL
+    WHERE c."deletedAt" IS NULL
+    GROUP BY c.id, c."companyName", c."uniqueSlug"
+    ORDER BY "activityScore" DESC, c.id ASC
+    LIMIT ${limit}
+  `
+
+  return rows.map((r) => ({
+    id: r.id,
+    companyName: r.companyName,
+    uniqueSlug: r.uniqueSlug,
+    submissions: Number(r.submissions),
+    comments: Number(r.comments),
+    files: Number(r.files),
+    activityScore: Number(r.activityScore),
+  }))
 }
 
 export type DashboardStats = {
@@ -201,14 +228,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     openInvites,
     clientsThisMonth,
   ] = await Promise.all([
-    prisma.client.count(),
-    prisma.submission.count(),
-    prisma.comment.count(),
-    prisma.file.count(),
-    prisma.submission.count({ where: { status: { in: ['SUBMITTED', 'IN_REVIEW'] } } }),
+    prisma.client.count({ where: { deletedAt: null } }),
+    prisma.submission.count({ where: { deletedAt: null } }),
+    prisma.comment.count({ where: { deletedAt: null } }),
+    prisma.file.count({ where: { deletedAt: null } }),
+    prisma.submission.count({ where: { status: { in: ['SUBMITTED', 'IN_REVIEW'] }, deletedAt: null } }),
     prisma.invite.count({ where: { status: 'OPEN' } }),
     prisma.client.count({
       where: {
+        deletedAt: null,
         createdAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
       },
     }),

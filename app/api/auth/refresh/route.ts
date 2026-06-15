@@ -35,7 +35,8 @@ function checkOrigin(host: string | null, origin: string | null): boolean {
 }
 
 export async function POST(req: Request) {
-  // 1. CSRF: Origin must match Host (or X-Forwarded-Host).
+  try {
+    // 1. CSRF: Origin must match Host (or X-Forwarded-Host).
   const h = await headers()
   const host = h.get('host') ?? h.get('x-forwarded-host')
   const origin = h.get('origin')
@@ -114,4 +115,8 @@ export async function POST(req: Request) {
     maxAge: 60 * 60 * 24 * 7,
   })
   return res
+  } catch (err) {
+    console.error('[auth/refresh] failed:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

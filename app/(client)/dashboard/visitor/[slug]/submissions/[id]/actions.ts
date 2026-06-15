@@ -56,7 +56,7 @@ export async function submitAction(
 
   // Load the form to get the schema, then validate server-side.
   const form = await prisma.form.findFirstOrThrow({
-    where: { id: formId, isActive: true },
+    where: { id: formId, isActive: true, deletedAt: null },
   })
   const schema = parseFormSchema(form.formSchema as unknown)
   const validated = validateSubmission(schema, parsedData)

@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
   // Verify submission belongs to this client (if provided).
   if (submissionId) {
-    const sub = await prisma.submission.findUnique({ where: { id: submissionId } })
+    const sub = await prisma.submission.findUnique({ where: { id: submissionId, deletedAt: null } })
     if (!sub || sub.clientId !== clientId) {
       return NextResponse.json({ error: 'Invalid submission' }, { status: 400 })
     }

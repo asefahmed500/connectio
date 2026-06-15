@@ -16,12 +16,19 @@ function formatSize(bytes: string): string {
 
 export default async function ClientFilesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>
+  searchParams: Promise<{ page?: string; pageSize?: string }>
 }) {
   const { slug } = await params
+  const sParams = await searchParams
+  const page = sParams.page ? parseInt(sParams.page, 10) : 1
+  const pageSize = sParams.pageSize ? parseInt(sParams.pageSize, 10) : 20
+
   const clientId = await requireClientAccessBySlug(slug)
-  const files = await listFilesForClient(clientId)
+  const result = await listFilesForClient(clientId, { page, pageSize })
+  const files = result.items
 
   return (
     <div className="space-y-6">
@@ -35,15 +42,39 @@ export default async function ClientFilesPage({
       <UploadForm clientId={clientId} />
 
       <div>
-        <h2 className="text-lg font-semibold mb-3">Your files</h2>
+        <h2 className="text-lg font-semibold mb-3">Your files ({result.total})</h2>
         {files.length === 0 ? (
           <p className="text-sm text-muted-foreground">No files uploaded yet.</p>
         ) : (
-          <ul className="space-y-2">
-            {files.map((f) => (
-              <FileRow key={f.id} file={f} sizeLabel={formatSize(f.size)} />
-            ))}
-          </ul>
+          <div className="space-y-4">
+            <ul className="space-y-2">
+              {files.map((f) => (
+                <FileRow key={f.id} file={f} sizeLabel={formatSize(f.size)} />
+              ))}
+            </ul>
+
+            {result.totalPages > 1 && (
+              <div className="flex items-center justify-between pt-4 border-t">
+                <div className="text-xs text-muted-foreground">
+                  Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, result.total)} of {result.total} results
+                </div>
+                <div className="flex gap-2">
+                  <Link
+                    href={`/dashboard/visitor/${slug}/files?page=${page - 1}&pageSize=${pageSize}`}
+                    className={`inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium ${page <= 1 ? 'pointer-events-none opacity-50' : 'hover:bg-muted'}`}
+                  >
+                    Previous
+                  </Link>
+                  <Link
+                    href={`/dashboard/visitor/${slug}/files?page=${page + 1}&pageSize=${pageSize}`}
+                    className={`inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium ${page >= result.totalPages ? 'pointer-events-none opacity-50' : 'hover:bg-muted'}`}
+                  >
+                    Next
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

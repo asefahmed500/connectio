@@ -21,5 +21,12 @@ export async function unassignAction(
   teamMemberId: string,
   clientId: string,
 ): Promise<void> {
-  await unassignTeamFromClient({ teamMemberId, clientId })
+  const parsed = AssignSchema.safeParse({ teamMemberId, clientId })
+  if (!parsed.success) return
+
+  try {
+    await unassignTeamFromClient(parsed.data)
+  } catch (err) {
+    console.error('[team] unassignAction failed:', err)
+  }
 }

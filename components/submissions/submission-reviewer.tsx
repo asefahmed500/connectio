@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { updateSubmissionStatusAction } from './actions'
@@ -36,34 +36,43 @@ export function SubmissionReviewer({
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   const allowed = ALLOWED[status]
 
   return (
-    <div className="flex flex-wrap gap-2 pt-2 border-t">
-      {ALL.filter((b) => allowed.includes(b.status)).map((b) => (
-        <Button
-          key={b.status}
-          type="button"
-          variant={b.variant}
-          size="sm"
-          disabled={pending}
-          onClick={() => {
-            startTransition(async () => {
-              await updateSubmissionStatusAction(submissionId, b.status)
-              router.refresh()
-            })
-          }}
-        >
-          {pending ? 'Updating…' : b.label}
-        </Button>
-      ))}
-      {allowed.length === 0 && (
-        <span className="text-xs text-muted-foreground self-center">
-          {status === 'DRAFT' && "Client hasn't submitted yet."}
-          {status === 'CHANGES_REQUESTED' && 'Waiting for client to revise and resubmit.'}
-          {(status === 'APPROVED' || status === 'REJECTED') && 'Terminal — no further actions.'}
-        </span>
-      )}
+    <div className="space-y-2 pt-2 border-t">
+      <div className="flex flex-wrap gap-2">
+        {ALL.filter((b) => allowed.includes(b.status)).map((b) => (
+          <Button
+            key={b.status}
+            type="button"
+            variant={b.variant}
+            size="sm"
+            disabled={pending}
+            onClick={() => {
+              setError(null)
+              startTransition(async () => {
+                const result = await updateSubmissionStatusAction(submissionId, b.status)
+                if (result?.error) {
+                  setError(result.error)
+                } else {
+                  router.refresh()
+                }
+              })
+            }}
+          >
+            {pending ? 'Updating…' : b.label}
+          </Button>
+        ))}
+        {allowed.length === 0 && (
+          <span className="text-xs text-muted-foreground self-center">
+            {status === 'DRAFT' && "Client hasn't submitted yet."}
+            {status === 'CHANGES_REQUESTED' && 'Waiting for client to revise and resubmit.'}
+            {(status === 'APPROVED' || status === 'REJECTED') && 'Terminal — no further actions.'}
+          </span>
+        )}
+      </div>
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
     </div>
   )
 }

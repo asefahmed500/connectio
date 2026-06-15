@@ -13,7 +13,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { verifyAccessToken } from '@/lib/auth/tokens'
 
 const PROTECTED_PREFIXES = ['/admin', '/team', '/dashboard/visitor']
-const AUTH_ONLY_PATHS = new Set(['/login', '/forgot-password', '/reset-password'])
+const isAuthOnlyPath = (path: string) =>
+  path === '/login' || path === '/reset-password' || path.startsWith('/reset-password/')
 
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname
@@ -28,7 +29,7 @@ export default async function proxy(req: NextRequest) {
   const claims = result.ok ? result.claims : null
 
   const isProtected = PROTECTED_PREFIXES.some((p) => path.startsWith(p))
-  const isAuthOnly = AUTH_ONLY_PATHS.has(path)
+  const isAuthOnly = isAuthOnlyPath(path)
 
   // Protected + no valid session → /login?next=<original>
   if (isProtected && !claims) {
@@ -55,10 +56,13 @@ export default async function proxy(req: NextRequest) {
     const wrongArea =
       (claims.role === 'CLIENT' && (path.startsWith('/admin') || path.startsWith('/team'))) ||
       (claims.role === 'TEAM_MEMBER' && path.startsWith('/admin')) ||
-      (claims.role === 'SUPER_ADMIN' && path.startsWith('/team'))
+      (claims.role === 'SUPER_ADMIN' && path.startsWith('/team')) ||
+      ((claims.role === 'TEAM_MEMBER' || claims.role === 'SUPER_ADMIN') && path.startsWith('/dashboard/visitor'))
     if (wrongArea) {
       const dest =
-        claims.role === 'CLIENT' ? '/dashboard/visitor' : '/admin'
+        claims.role === 'CLIENT' ? '/dashboard/visitor'
+        : claims.role === 'TEAM_MEMBER' ? '/team'
+        : '/admin'
       return NextResponse.redirect(new URL(dest, req.nextUrl))
     }
   }

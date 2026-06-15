@@ -67,8 +67,18 @@ export async function postReplyAction(
 }
 
 export async function deleteCommentAction(commentId: string, clientId: string): Promise<void> {
-  await deleteComment(commentId)
-  revalidateForClient(clientId)
+  const parsed = z.object({
+    commentId: z.string().cuid(),
+    clientId: z.string().cuid(),
+  }).safeParse({ commentId, clientId })
+  if (!parsed.success) return
+
+  try {
+    await deleteComment(commentId)
+    revalidateForClient(clientId)
+  } catch (err) {
+    console.error('[comments] deleteCommentAction failed:', err)
+  }
 }
 
 // Refresh both the admin client-detail view and the client messages view so

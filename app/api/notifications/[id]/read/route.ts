@@ -8,8 +8,13 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { id } = await params
-  await markRead(id)
-  revalidatePath('/', 'layout')
-  return NextResponse.json({ ok: true })
+  try {
+    const { id } = await params
+    await markRead(id)
+    revalidatePath('/', 'layout')
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    console.error('[notifications] markRead failed:', err)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
 }

@@ -46,45 +46,56 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     return { error: `Too many attempts. Try again in ${rl.retryAfter}s.` }
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() },
-    include: { client: { select: { id: true, uniqueSlug: true } } },
-  })
+  let loginUser: Awaited<ReturnType<typeof prisma.user.findUnique<{
+    where: { email: string }
+    include: { client: { select: { id: true; uniqueSlug: true } } }
+  }>>>
+  try {
+    loginUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { client: { select: { id: true, uniqueSlug: true } } },
+    })
 
-  // verifyPassword handles the null case via the dummy hash → constant time.
-  const valid = await verifyPassword(user?.passwordHash ?? null, password)
-  if (!user || !valid) {
-    return { error: 'Invalid email or password.' }
+    // verifyPassword handles the null case via the dummy hash → constant time.
+    const valid = await verifyPassword(loginUser?.passwordHash ?? null, password)
+    if (!loginUser || !valid) {
+      return { error: 'Invalid email or password.' }
+    }
+
+    // GC expired sessions opportunistically.
+    await prisma.session.deleteMany({
+      where: { userId: loginUser.id, expiresAt: { lt: new Date() } },
+    })
+
+    await createSession({
+      userId: loginUser.id,
+      role: loginUser.role,
+      clientId: loginUser.client?.id,
+      tokenVersion: loginUser.tokenVersion,
+      ip,
+      userAgent: (await headers()).get('user-agent'),
+    })
+
+    await prisma.user.update({
+      where: { id: loginUser.id },
+      data: { lastLoginAt: new Date() },
+    })
+
+    await writeAudit({
+      action: 'USER_LOGIN',
+      userId: loginUser.id,
+      resource: 'User',
+      resourceId: loginUser.id,
+    })
+  } catch (err) {
+    console.error('[login] failed:', err)
+    return { error: 'Something went wrong. Please try again.' }
   }
 
-  // GC expired sessions opportunistically.
-  await prisma.session.deleteMany({
-    where: { userId: user.id, expiresAt: { lt: new Date() } },
-  })
-
-  await createSession({
-    userId: user.id,
-    role: user.role,
-    clientId: user.client?.id,
-    tokenVersion: user.tokenVersion,
-    ip,
-    userAgent: (await headers()).get('user-agent'),
-  })
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lastLoginAt: new Date() },
-  })
-
-  await writeAudit({
-    action: 'USER_LOGIN',
-    userId: user.id,
-    resource: 'User',
-    resourceId: user.id,
-  })
-
-  // REVIEW.md §3.4 (role-change propagation): tokenVersion is embedded in the JWT
-  // and checked on every getCurrentUser() call, so a demoted user's session
-  // invalidates immediately when their tokenVersion bumps.
-  redirect(dashboardForRole(user.role, user.client?.uniqueSlug) || next)
+  // Redirect to role dashboard, or to `next` if it's under the user's own route prefix.
+  const dash = dashboardForRole(loginUser.role, loginUser.client?.uniqueSlug)
+  if (next && next !== '/' && next !== dash && next.startsWith(dash)) {
+    redirect(next)
+  }
+  redirect(dash)
 }

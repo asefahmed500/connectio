@@ -7,13 +7,22 @@ const schema = z.object({
   AUTH_PASSWORD_PEPPER: z.string().min(32).optional(),
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 
+  // Cloudflare R2 (S3-compatible object storage)
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET_NAME: z.string().optional(),
+
+  // AWS S3 / S3-compatible
   S3_BUCKET: z.string().optional(),
   S3_REGION: z.string().optional(),
   S3_ACCESS_KEY: z.string().optional(),
   S3_SECRET: z.string().optional(),
+  S3_ENDPOINT: z.string().url().optional(),
 
-  UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+
 
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().optional(),
@@ -26,8 +35,8 @@ const schema = z.object({
   MAX_UPLOAD_BYTES: z.coerce.number().default(50 * 1024 * 1024),
 
   NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: z.string().optional(),
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
-  SENTRY_DSN: z.string().url().optional(),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+  SENTRY_DSN: z.string().optional(),
   CRON_SECRET: z.string().optional(),
 })
 
@@ -39,13 +48,12 @@ function parseEnv() {
   }
 
   if (parsed.data.NODE_ENV === 'production') {
-    const required = [
-      'S3_BUCKET', 'S3_REGION', 'S3_ACCESS_KEY', 'S3_SECRET',
-      'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM',
-    ] as const
-    const missing = required.filter((k) => !parsed.data[k])
-    if (missing.length) {
-      throw new Error(`Missing required production env vars: ${missing.join(', ')}`)
+    const hasR2 = parsed.data.R2_ACCOUNT_ID && parsed.data.R2_ACCESS_KEY_ID && parsed.data.R2_SECRET_ACCESS_KEY && parsed.data.R2_BUCKET_NAME
+    const hasS3 = parsed.data.S3_BUCKET && parsed.data.S3_REGION && parsed.data.S3_ACCESS_KEY && parsed.data.S3_SECRET
+    if (!hasR2 && !hasS3) {
+      throw new Error(
+        'Production requires storage config. Set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME for Cloudflare R2, or S3_BUCKET, S3_REGION, S3_ACCESS_KEY, S3_SECRET for AWS S3.',
+      )
     }
   }
 

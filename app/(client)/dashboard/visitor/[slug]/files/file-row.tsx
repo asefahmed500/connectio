@@ -1,6 +1,7 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import type { FileDTO } from '@/lib/dal/files'
 import { deleteFileAction } from './actions'
@@ -12,14 +13,15 @@ export function FileRow({
   file: FileDTO
   sizeLabel: string
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   return (
     <li className="border rounded-lg p-3 flex justify-between items-center gap-3">
       <div className="min-w-0">
         <a
           href={`/api/uploads/${file.id}`}
           className="font-medium hover:underline truncate block"
-          // Force download; never render untrusted content inline.
           download={file.originalName}
         >
           {file.originalName}
@@ -30,14 +32,21 @@ export function FileRow({
       </div>
       <form
         action={() => {
+          setError(null)
           startTransition(async () => {
-            await deleteFileAction(file.id)
+            try {
+              await deleteFileAction(file.id)
+              router.refresh()
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Failed to delete file')
+            }
           })
         }}
       >
         <Button type="submit" variant="ghost" size="sm" disabled={pending}>
           {pending ? 'Deleting…' : 'Delete'}
         </Button>
+        {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       </form>
     </li>
   )

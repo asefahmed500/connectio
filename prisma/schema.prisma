@@ -43,6 +43,7 @@ model User {
   sessions      Session[]
   notifications Notification[]
   uploadedFiles File[]        @relation("FileUploader")
+  passwordResetTokens PasswordResetToken[]
 
   lastLoginAt   DateTime?
   createdAt     DateTime       @default(now())
@@ -69,6 +70,23 @@ model Session {
   ip                String?
   userAgent         String?
   createdAt         DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Password Reset Tokens
+// ─────────────────────────────────────────────────────────────────
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
@@ -129,8 +147,10 @@ model Client {
 
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
 
   @@index([uniqueSlug])
+  @@index([deletedAt])
 }
 
 model TeamMember {
@@ -141,6 +161,9 @@ model TeamMember {
   assignments   TeamAssignment[]
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
+
+  @@index([deletedAt])
 }
 
 model TeamAssignment {
@@ -168,8 +191,10 @@ model Form {
   submissions   Submission[]
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
 
   @@index([isActive])
+  @@index([deletedAt])
 }
 
 enum SubmissionStatus {
@@ -199,10 +224,13 @@ model Submission {
 
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
+  deletedAt     DateTime?
 
   @@unique([clientId, formId])
   @@index([status])
   @@index([formId])
+  @@index([clientId])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -225,9 +253,11 @@ model File {
   uploadedBy    User         @relation("FileUploader", fields: [uploadedById], references: [id])
 
   uploadedAt    DateTime     @default(now())
+  deletedAt     DateTime?
 
   @@index([submissionId])
   @@index([clientId])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -253,10 +283,12 @@ model Comment {
 
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
 
   @@index([clientId, createdAt])
   @@index([submissionId])
   @@index([authorId])
+  @@index([deletedAt])
 }
 
 // ─────────────────────────────────────────────────────────────────

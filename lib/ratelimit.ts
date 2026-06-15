@@ -1,8 +1,7 @@
 import 'server-only'
 
-// In-memory token-bucket rate limiter. Sufficient for development and single-instance deploys.
-// Production should swap this for Upstash Redis (REVIEW-3.md §3.5). The public API
-// (rateLimit) stays identical so the swap is one file.
+// Hybrid rate limiter: Upstash Redis when configured, in-memory token bucket as fallback.
+// The public API (rateLimit, rateLimitAll) stays identical regardless of backend.
 
 interface Bucket {
   tokens: number
@@ -17,33 +16,61 @@ let lastCleanup = Date.now()
 function cleanup(now: number) {
   if (now - lastCleanup < CLEANUP_INTERVAL) return
   lastCleanup = now
-  // Drop buckets that have fully refilled (i.e. are at capacity) — they're stale.
   for (const [key, b] of buckets) {
     if (b.tokens >= 1000) buckets.delete(key)
   }
 }
 
-export interface RateBucket {
-  /** Maximum tokens the bucket holds. */
-  limit: number
-  /** Window in seconds for full refill. */
-  window: number
+// ── Redis (Upstash REST API) ─────────────────────────────────────
+
+function redisConfigured(): boolean {
+  return !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN)
 }
 
-/**
- * Returns true if the request is allowed; false if rate-limited.
- *
- * Pass a stable key like `login:ip:<ip>` or `login:email:<email>`.
- * The same key shares a bucket across calls within the window.
- */
-export async function rateLimit(
+async function redisIncr(key: string, windowSeconds: number): Promise<number> {
+  const url = process.env.UPSTASH_REDIS_REST_URL!
+  const res = await fetch(`${url}/incr/${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN!}` },
+  })
+  const data = (await res.json()) as { result: number }
+  // Set expiry on first create (INCR returns 1)
+  if (data.result === 1) {
+    await fetch(`${url}/expire/${encodeURIComponent(key)}/${windowSeconds}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.UPSTASH_REDIS_REST_TOKEN!}` },
+    })
+  }
+  return data.result
+}
+
+async function redisRateLimit(
+  key: string,
+  bucket: RateBucket,
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  const windowKey = `rl:${key}:${Math.floor(Date.now() / (bucket.window * 1000))}`
+  try {
+    const count = await redisIncr(windowKey, bucket.window)
+    if (count > bucket.limit) {
+      return { ok: false, retryAfter: bucket.window }
+    }
+    return { ok: true }
+  } catch {
+    // Redis down — fall through to in-memory
+  }
+  return inMemoryRateLimit(key, bucket)
+}
+
+// ── In-memory token bucket ──────────────────────────────────────
+
+async function inMemoryRateLimit(
   key: string,
   bucket: RateBucket,
 ): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
   const now = Date.now()
   cleanup(now)
 
-  const refillRate = bucket.limit / (bucket.window * 1000) // tokens per ms
+  const refillRate = bucket.limit / (bucket.window * 1000)
   const existing = buckets.get(key)
 
   let b: Bucket
@@ -66,7 +93,23 @@ export async function rateLimit(
   return { ok: true }
 }
 
-/** Combine multiple rate-limit checks; returns the first failure or success if all pass. */
+// ── Public API ──────────────────────────────────────────────────
+
+export interface RateBucket {
+  limit: number
+  window: number
+}
+
+export async function rateLimit(
+  key: string,
+  bucket: RateBucket,
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+  if (redisConfigured()) {
+    return redisRateLimit(key, bucket)
+  }
+  return inMemoryRateLimit(key, bucket)
+}
+
 export async function rateLimitAll(
   ...checks: Array<Promise<{ ok: true } | { ok: false; retryAfter: number }>>
 ): Promise<{ ok: true } | { ok: false; retryAfter: number }> {

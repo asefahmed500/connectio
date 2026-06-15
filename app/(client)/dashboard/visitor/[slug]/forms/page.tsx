@@ -1,6 +1,6 @@
 import Link from 'next/link'
-import { prisma } from '@/lib/db'
-import { requireClientAccessBySlug, getCurrentUser } from '@/lib/dal/session'
+import { requireClientAccessBySlug } from '@/lib/dal/session'
+import { listActiveFormsForClient } from '@/lib/dal/forms'
 
 export const metadata = { title: 'Forms — ClientConnect' }
 
@@ -12,16 +12,7 @@ export default async function ClientFormsPage({
   const { slug } = await params
   const clientId = await requireClientAccessBySlug(slug)
 
-  const forms = await prisma.form.findMany({
-    where: { isActive: true },
-    orderBy: { createdAt: 'asc' },
-    include: {
-      submissions: {
-        where: { clientId },
-        select: { id: true, status: true, updatedAt: true },
-      },
-    },
-  })
+  const forms = await listActiveFormsForClient(clientId)
 
   return (
     <div className="space-y-6">
@@ -41,7 +32,7 @@ export default async function ClientFormsPage({
       ) : (
         <ul className="space-y-3">
           {forms.map((f) => {
-            const sub = f.submissions[0]
+            const sub = f.submission
             return (
               <li key={f.id} className="border rounded-lg p-4">
                 <div className="flex justify-between items-start gap-4">

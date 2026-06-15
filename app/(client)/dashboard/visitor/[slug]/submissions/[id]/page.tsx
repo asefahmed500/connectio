@@ -18,7 +18,7 @@ export default async function SubmissionPage({
   const sub = await getSubmissionDTO(id)
   if (sub.clientId !== clientId) notFound()
 
-  const form = await prisma.form.findUniqueOrThrow({ where: { id: sub.formId } })
+  const form = await prisma.form.findUniqueOrThrow({ where: { id: sub.formId, deletedAt: null } })
   const schema = parseFormSchema(form.formSchema as unknown)
 
   // Determine if the client can edit based on state machine.

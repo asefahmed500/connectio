@@ -2,8 +2,9 @@ import 'server-only'
 import { cache } from 'react'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
-import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { requireRole, requireClientAccess, getCurrentUser } from '@/lib/dal/session'
 import type { FormSchemaV1 } from '@/lib/forms/schema'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 import type { SubmissionStatus } from '@prisma/client'
 
 // State machine — see docs/05-forms-and-submissions.md.
@@ -62,12 +63,36 @@ function toDTO(s: {
   }
 }
 
+import { NotFoundError, ValidationError } from '@/lib/errors'
+
 export const getSubmissionDTO = cache(async (submissionId: string): Promise<SubmissionDTO> => {
-  const sub = await prisma.submission.findUniqueOrThrow({
-    where: { id: submissionId },
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Build a lightweight check for existence and get the client ID first
+  const subInfo = await prisma.submission.findFirst({
+    where: { id: submissionId, deletedAt: null },
+    select: { clientId: true },
+  })
+  if (!subInfo) {
+    throw new NotFoundError('Submission')
+  }
+
+  // Check client access first to prevent timing leaks on unauthorized queries
+  await requireClientAccess(subInfo.clientId)
+
+  // Enforce CLIENT role matches its assigned client (extra guard)
+  const where: Prisma.SubmissionWhereInput = {
+    id: submissionId,
+    deletedAt: null,
+    ...(user.role === 'CLIENT' ? { clientId: user.client?.id } : {}),
+  }
+
+  const sub = await prisma.submission.findFirstOrThrow({
+    where,
     include: { form: { select: { title: true } } },
   })
-  await requireClientAccess(sub.clientId)
+
   return toDTO(sub)
 })
 
@@ -78,8 +103,8 @@ export async function getOrCreateDraft(opts: {
   const { clientId, formId } = opts
   await requireClientAccess(clientId)
 
-  const existing = await prisma.submission.findUnique({
-    where: { clientId_formId: { clientId, formId } },
+  const existing = await prisma.submission.findFirst({
+    where: { clientId, formId, deletedAt: null },
     include: { form: { select: { title: true } } },
   })
   if (existing) return toDTO(existing)
@@ -92,6 +117,20 @@ export async function getOrCreateDraft(opts: {
   return toDTO(created)
 }
 
+// Maximum bytes for a single submission's formData JSON. Protects against
+// DB bloat from oversized payloads. 500KB is generous for structured form
+// fields while still being safe.
+const MAX_FORM_DATA_BYTES = 500_000
+
+function enforceSizeLimit(formData: Record<string, unknown>): void {
+  const size = Buffer.byteLength(JSON.stringify(formData), 'utf-8')
+  if (size > MAX_FORM_DATA_BYTES) {
+    throw new ValidationError(
+      { formData: [`Form data exceeds ${MAX_FORM_DATA_BYTES / 1000}KB limit (${size} bytes)`] }
+    )
+  }
+}
+
 export async function saveDraft(opts: {
   clientId: string
   formId: string
@@ -99,6 +138,8 @@ export async function saveDraft(opts: {
 }): Promise<void> {
   const { clientId, formId, formData } = opts
   await requireClientAccess(clientId)
+
+  enforceSizeLimit(formData)
 
   await prisma.submission.upsert({
     where: { clientId_formId: { clientId, formId } },
@@ -115,15 +156,17 @@ export async function submit(opts: {
   const { clientId, formId, formData } = opts
   await requireClientAccess(clientId)
 
+  enforceSizeLimit(formData)
+
   // Verify there's an active form — defense in depth.
   const form = await prisma.form.findFirstOrThrow({
-    where: { id: formId, isActive: true },
+    where: { id: formId, isActive: true, deletedAt: null },
   })
 
   // Lazy-validate the existing draft's state — only DRAFT and CHANGES_REQUESTED
   // can transition to SUBMITTED.
-  const existing = await prisma.submission.findUnique({
-    where: { clientId_formId: { clientId, formId } },
+  const existing = await prisma.submission.findFirst({
+    where: { clientId, formId, deletedAt: null },
   })
   if (existing && !canTransition(existing.status, 'SUBMITTED')) {
     throw new Error(`Cannot submit from status ${existing.status}`)
@@ -151,6 +194,17 @@ export async function submit(opts: {
   })
   void form // satisfy lints
 
+  const { writeAudit } = await import('@/lib/audit')
+  const user = await getCurrentUser()
+  if (user) {
+    await writeAudit({
+      action: 'SUBMISSION_SUBMITTED',
+      userId: user.id,
+      resource: 'Submission',
+      resourceId: upserted.id,
+    })
+  }
+
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'SUBMISSION_SUBMITTED',
@@ -163,14 +217,27 @@ export async function submit(opts: {
   return toDTO(upserted)
 }
 
-export async function listSubmissionsForClient(clientId: string): Promise<SubmissionDTO[]> {
+export async function listSubmissionsForClient(
+  clientId: string,
+  params?: PaginationParams,
+): Promise<PaginatedResult<SubmissionDTO>> {
   await requireClientAccess(clientId)
-  const rows = await prisma.submission.findMany({
-    where: { clientId },
-    include: { form: { select: { title: true } } },
-    orderBy: { updatedAt: 'desc' },
-  })
-  return rows.map(toDTO)
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.submission.findMany({
+      where: { clientId, deletedAt: null },
+      include: { form: { select: { title: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.submission.count({
+      where: { clientId, deletedAt: null },
+    }),
+  ])
+
+  return toPaginated(rows.map(toDTO), total, params)
 }
 
 export async function updateStatus(opts: {
@@ -178,7 +245,7 @@ export async function updateStatus(opts: {
   next: SubmissionStatus
 }): Promise<void> {
   const user = await requireRole('SUPER_ADMIN', 'TEAM_MEMBER')
-  const sub = await prisma.submission.findUniqueOrThrow({ where: { id: opts.submissionId } })
+  const sub = await prisma.submission.findFirstOrThrow({ where: { id: opts.submissionId, deletedAt: null } })
   await requireClientAccess(sub.clientId)
 
   if (!canTransition(sub.status, opts.next)) {
@@ -186,27 +253,35 @@ export async function updateStatus(opts: {
   }
 
   const isReviewDecision = opts.next === 'APPROVED' || opts.next === 'REJECTED'
-  await prisma.submission.update({
-    where: { id: opts.submissionId },
-    data: {
-      status: opts.next,
-      reviewedBy: isReviewDecision ? user.id : sub.reviewedBy,
-      reviewedAt: isReviewDecision ? new Date() : sub.reviewedAt,
-    },
-  })
 
-  const { writeAudit } = await import('@/lib/audit')
-  await writeAudit({
-    action: `SUBMISSION_${opts.next}`,
-    userId: user.id,
-    resource: 'Submission',
-    resourceId: opts.submissionId,
+  // Wrap update + audit in a transaction so audit never diverges from the
+  // business data. Notification is fire-and-forget outside the tx.
+  await prisma.$transaction(async (tx) => {
+    await tx.submission.update({
+      where: { id: opts.submissionId },
+      data: {
+        status: opts.next,
+        reviewedBy: isReviewDecision ? user.id : sub.reviewedBy,
+        reviewedAt: isReviewDecision ? new Date() : sub.reviewedAt,
+      },
+    })
+
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit(
+      {
+        action: `SUBMISSION_${opts.next}`,
+        userId: user.id,
+        resource: 'Submission',
+        resourceId: opts.submissionId,
+      },
+      tx,
+    )
   })
 
   // Notify the client of the status change.
   const { notify } = await import('@/lib/notifications/notify')
-  const form = await prisma.form.findUniqueOrThrow({
-    where: { id: sub.formId },
+  const form = await prisma.form.findFirstOrThrow({
+    where: { id: sub.formId, deletedAt: null },
     select: { title: true },
   })
   const eventBase = {
@@ -232,9 +307,8 @@ export async function updateStatus(opts: {
 }
 
 // Helper exported for tests + the form-filling UI.
-export function isValidAgainstSchema(schema: FormSchemaV1, data: unknown) {
+export async function isValidAgainstSchema(schema: FormSchemaV1, data: unknown) {
   // Lazy-load the validator so this file doesn't pull zod into a client bundle.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { validateSubmission } = require('@/lib/forms/validate') as typeof import('@/lib/forms/validate')
+  const { validateSubmission } = await import('@/lib/forms/validate')
   return validateSubmission(schema, data)
 }

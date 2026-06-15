@@ -6,32 +6,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `npm run dev` — start the Next.js dev server (http://localhost:3000)
-- `npm run build` — production build
-- `npm run start` — serve the production build
-- `npm run lint` — ESLint (flat config, `eslint-config-next` core-web-vitals + typescript)
+| What | Command |
+|------|---------|
+| Dev server | `npm run dev` (http://localhost:3000) |
+| Typecheck | `npm run typecheck` (`tsc --noEmit`) |
+| Lint | `npm run lint` (ESLint flat config) |
+| Build | `npm run build` |
+| Run all tests | `npm test` (vitest) |
+| Watch tests | `npm run test:watch` |
+| **Single vitest file** | `npx vitest run tests/unit/tokens.test.ts` |
+| **Single vitest test by name** | `npx vitest run -t "rejects expired tokens"` |
+| E2E tests | `npm run test:e2e` (Playwright) |
+| **Single Playwright spec** | `npx playwright test tests/e2e/auth-flow.spec.ts` |
+| Audit (typecheck + lint + test) | `npm run audit` |
+| DB migrate (dev) | `npm run db:migrate:dev` |
+| DB studio | `npm run db:studio` |
+| DB seed | `npm run db:seed` |
 
-No test runner is configured. There is no single-test command to run.
+**Verify order before considering work done:** `typecheck → build`. Lint + tests run in parallel; `npm run audit` runs all three.
 
-## Project status — greenfield
+## Project status — implemented
 
-This repo is a fresh `create-next-app` scaffold. The `prd.md` file (1,450 lines) is the **target spec** for a product called **ClientConnect Portal** — a multi-tenant client portal with three roles (Super Admin, Team Member, Client), JWT auth, dynamic requirement forms, file uploads, threaded comments, and an admin analytics dashboard.
+ClientConnect Portal is a multi-tenant client portal with three roles (Super Admin, Team Member, Client), JWT + refresh-token auth, dynamic requirement forms with a submission state machine, file uploads (local + S3), 2-level threaded comments, notifications (SSE + email), and an admin analytics dashboard. The scaffold in the original `prd.md` is largely built.
 
-Almost nothing in `prd.md` is implemented yet. The non-scaffold code so far: the full shadcn/ui kit under `components/ui/` (~44 components), `lib/utils.ts` (`cn()`), and `hooks/use-mobile.ts`. No routes, API handlers, auth, database, or feature code exists. When the user asks to implement something, treat `prd.md` as the source of truth for requirements, schema, and API shape — but reconcile it against the actual code, since `prd.md` will go stale as work proceeds.
+- **Source of truth for behavior & architecture:** `AGENTS.md` (imported above) + the doc files under `docs/`. Read the relevant `docs/NN-*.md` before modifying a subsystem.
+- **`prd.md` is a historical spec.** It describes `pages/api/*` route handlers and `lib/prisma.ts`, but the actual project uses the **App Router** (`app/.../route.ts`) and `lib/db.ts`. When `prd.md` conflicts with code or AGENTS.md, trust the code.
+- **Performance work in flight:** `PERFORMANCE_AUDIT.md` + `PERFORMANCE_PLAN.md` at repo root.
 
-### Where `prd.md` conflicts with the code
+## Tech stack
 
-- **Routing:** `prd.md` describes the `pages/` directory and `pages/api/*` route handlers. The actual project uses the **App Router** (`app/`). New routes must go under `app/` using App Router conventions (route handlers in `app/.../route.ts`, server components by default, `next/font`, etc.). Do not create a `pages/` directory.
-- **Prisma:** `prd.md` references `prisma/` and `lib/prisma.ts`. Neither exists yet — `DATABASE_URL` is configured in `.env.local`, but Prisma is **not** in `package.json` dependencies. Adding the data layer is its own task; flag it rather than silently assuming it's there.
-- **Auth:** `prd.md` assumes `jsonwebtoken` + `bcrypt`. Neither is installed. Next.js 16 has built-in auth primitives worth checking in `node_modules/next/dist/docs/` before reaching for third-party packages.
+- **Next.js 16.2.9, React 19.2.4** — App Router. `middleware.ts` is renamed to **`proxy.ts`**; do not create `middleware.ts`. Per `AGENTS.md`, consult `node_modules/next/dist/docs/` before writing Next.js code — APIs from training data may have moved.
+- **Prisma 6 + PostgreSQL** — schema at `prisma/schema.prisma`. Singleton at `lib/db.ts` (global-cached for dev hot-reload). Every DB call must go through `lib/dal/*`; never call `prisma` directly from a page/action.
+- **Auth:** `jose` (JWT, HS256) + `@node-rs/argon2` (argon2id passwords). Dual-token system (access + refresh) with `User.tokenVersion` for session invalidation.
+- **Tailwind CSS v4** — CSS-first config via `@import "tailwindcss"` + `@theme inline {}`. No `tailwind.config.ts`. Theme tokens are oklch CSS variables in `app/globals.css`.
+- **shadcn/ui v4 (Radix Nova)** — `components.json` style `"radix-nova"`, 47 components in `components/ui/`, icon library `lucide-react`.
+- **Zod 4** — note `.email()` returns a string, not `z.ZodString`.
+- **TypeScript strict, `@/*` → project root** (no `src/`). `server-only` must be the first import in every `lib/` module.
 
-## Tech stack (what's actually installed)
+## Architectural pillars (details in AGENTS.md)
 
-- **Next.js 16.2.9, React 19.2.4** — bleeding edge. The `AGENTS.md` rule applies: read `node_modules/next/dist/docs/01-app/` (getting-started, guides, api-reference) before writing Next.js code. Heed deprecation notices — APIs you remember from training data may have moved or been removed.
-- **Tailwind CSS v4** — configured via PostCSS, theme tokens defined as CSS variables in `app/globals.css` (oklch color space). No `tailwind.config.js`; v4 uses CSS-first config.
-- **shadcn/ui** — `style: "radix-nova"` per `components.json`. Components live in `components/ui/`. Aliases: `@/components`, `@/components/ui`, `@/lib`, `@/lib/utils`, `@/hooks`. Icon library is `lucide-react`.
-- **TypeScript** — `strict: true`, path alias `@/*` → project root.
+1. **DAL (`lib/dal/*`)** is the only door to the database. Pattern: auth check → RBAC (`requireClientAccess`) → return plain DTO (cached for reads) → mutate in `$transaction` with `writeAudit()` → `notify()` for real-time. Soft deletes via `deletedAt` on Client, Form, Submission, File, Comment, TeamMember.
+2. **3-role RBAC** with one route group per role: `(admin)`, `(team)`, `(client)`, plus `(auth)`. Layouts enforce via `requireRole()`.
+3. **Submission state machine** (`DRAFT → SUBMITTED → IN_REVIEW → APPROVED | CHANGES_REQUESTED → SUBMITTED | REJECTED`) gated by `canTransition()` in `lib/dal/submissions.ts`. `@@unique([clientId, formId])` enforces one submission per client per form.
+4. **Notifications** — 17 event types. Adding a new event requires touching 4 files (see AGENTS.md §Notifications). SSE at `/api/notifications/stream` with polling fallback.
+5. **Storage adapter** (`lib/storage/`) — `LocalFsAdapter` in dev, `S3Adapter` auto-wires in prod when `S3_*` env vars are set. Magic-byte validation before write. Deletes are soft on the DB row; storage objects are kept.
 
 ## Available agent skills
 
-Skills vendored under `.agents/skills/` (registered in `skills-lock.json`) cover Next.js 16 specifics (`next-best-practices`, `next-cache-components`, `next-upgrade`), shadcn (`shadcn`), and Vercel deploy/perf/composition patterns. Prefer these over guessing Next 16 / shadcn behavior.
+Skills vendored under `.agents/skills/` (registered in `skills-lock.json`) cover Next.js 16 specifics (`next-best-practices`, `next-cache-components`, `next-upgrade`, `next-browser`), shadcn, and Vercel deploy/perf/composition patterns. Prefer these over guessing Next 16 / shadcn behavior.

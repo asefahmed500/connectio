@@ -55,7 +55,7 @@ function renderField(
         <Input
           id={id}
           type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
-          value={(value as string) ?? ''}
+          value={typeof value === 'string' ? value : value === undefined ? '' : String(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
           disabled={disabled}
@@ -84,7 +84,7 @@ function renderField(
       return (
         <Textarea
           id={id}
-          value={(value as string) ?? ''}
+          value={typeof value === 'string' ? value : value === undefined ? '' : String(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
           disabled={disabled}
@@ -97,7 +97,7 @@ function renderField(
     case 'select':
       return (
         <Select
-          value={(value as string) ?? ''}
+          value={typeof value === 'string' ? value : ''}
           onValueChange={(v) => onChange(v)}
           disabled={disabled}
         >
@@ -105,7 +105,7 @@ function renderField(
             <SelectValue placeholder="Choose…" />
           </SelectTrigger>
           <SelectContent>
-            {field.options!.map((o) => (
+            {(field.options ?? []).map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}
               </SelectItem>
@@ -117,11 +117,11 @@ function renderField(
     case 'radio':
       return (
         <RadioGroup
-          value={(value as string) ?? ''}
+          value={typeof value === 'string' ? value : ''}
           onValueChange={(v) => onChange(v)}
           disabled={disabled}
         >
-          {field.options!.map((o) => (
+          {(field.options ?? []).map((o) => (
             <div key={o.value} className="flex items-center gap-2">
               <RadioGroupItem id={`${id}-${o.value}`} value={o.value} />
               <Label htmlFor={`${id}-${o.value}`}>{o.label}</Label>
@@ -135,7 +135,7 @@ function renderField(
       const selected = (value as string[] | undefined) ?? []
       return (
         <div className="space-y-2">
-          {field.options!.map((o) => {
+          {(field.options ?? []).map((o) => {
             const checked = selected.includes(o.value)
             return (
               <div key={o.value} className="flex items-center gap-2">

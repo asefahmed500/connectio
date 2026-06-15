@@ -60,6 +60,7 @@ export const getCommentsDTO = cache(
       where: {
         clientId: opts.clientId,
         submissionId: opts.submissionId ?? null,
+        deletedAt: null,
         // Clients never see internal comments.
         ...(claims.role === 'CLIENT' ? { isInternal: false } : {}),
       },
@@ -108,7 +109,7 @@ export async function postComment(opts: {
   //   - be a top-level comment (parentId === null on the parent)
   //     — otherwise we'd be creating a 3rd level, breaking the depth invariant.
   if (opts.parentId) {
-    const parent = await prisma.comment.findUnique({ where: { id: opts.parentId } })
+    const parent = await prisma.comment.findFirst({ where: { id: opts.parentId, deletedAt: null } })
     if (!parent || parent.clientId !== opts.clientId) {
       throw new Error('Invalid parent comment')
     }
@@ -119,7 +120,7 @@ export async function postComment(opts: {
 
   // If submissionId provided, it must belong to this client.
   if (opts.submissionId) {
-    const sub = await prisma.submission.findUnique({ where: { id: opts.submissionId } })
+    const sub = await prisma.submission.findFirst({ where: { id: opts.submissionId, deletedAt: null } })
     if (!sub || sub.clientId !== opts.clientId) {
       throw new Error('Invalid submission')
     }
@@ -181,7 +182,7 @@ export async function deleteComment(commentId: string): Promise<void> {
   const user = await getCurrentUser()
   if (!user) throw new Error('Not authenticated')
 
-  const comment = await prisma.comment.findUnique({ where: { id: commentId } })
+  const comment = await prisma.comment.findFirst({ where: { id: commentId, deletedAt: null } })
   if (!comment) return
 
   await requireClientAccess(comment.clientId)
@@ -190,14 +191,22 @@ export async function deleteComment(commentId: string): Promise<void> {
     user.role === 'SUPER_ADMIN' || comment.authorId === user.id
   if (!canDelete) throw new Error('Not allowed to delete this comment')
 
-  // Cascade deletes replies via the self-relation onDelete: Cascade.
-  await prisma.comment.delete({ where: { id: commentId } })
-
-  const { writeAudit } = await import('@/lib/audit')
-  await writeAudit({
-    action: 'COMMENT_DELETED',
-    userId: user.id,
-    resource: 'Comment',
-    resourceId: commentId,
+  // Soft-delete only — preserves data for audit trail. Cascade soft-deletes
+  // to replies via a separate update (the self-relation handles the link).
+  await prisma.$transaction(async (tx) => {
+    await tx.comment.updateMany({
+      where: { OR: [{ id: commentId }, { parentId: commentId }] },
+      data: { deletedAt: new Date() },
+    })
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit(
+      {
+        action: 'COMMENT_DELETED',
+        userId: user.id,
+        resource: 'Comment',
+        resourceId: commentId,
+      },
+      tx,
+    )
   })
 }

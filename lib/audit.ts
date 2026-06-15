@@ -1,26 +1,24 @@
 import 'server-only'
 import { headers } from 'next/headers'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db'
 
-/**
- * Writes an audit log entry. Currently writes directly to the DB.
- *
- * Tier 1.5 (REVIEW-4.md §6.1) routes this through the transactional outbox
- * for tamper-evidence (hash chain + WORM storage). The signature won't change;
- * only the internal delivery mechanism will.
- *
- * Call from inside Server Actions / Route Handlers. Avoid calling during render.
- */
-export async function writeAudit(params: {
-  action: string
-  userId: string | null
-  resource: string
-  resourceId: string
-  changes?: { before?: unknown; after?: unknown }
-}): Promise<void> {
+type TxClient = Omit<Prisma.TransactionClient, '$transaction'>
+
+export async function writeAudit(
+  params: {
+    action: string
+    userId: string | null
+    resource: string
+    resourceId: string
+    changes?: { before?: unknown; after?: unknown }
+  },
+  tx?: TxClient,
+): Promise<void> {
+  const client = tx ?? prisma
   const [ip, userAgent] = await Promise.all([readIp(), readUserAgent()])
 
-  await prisma.auditLog.create({
+  await client.auditLog.create({
     data: {
       userId: params.userId,
       action: params.action,

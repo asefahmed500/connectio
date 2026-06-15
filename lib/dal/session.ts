@@ -141,8 +141,8 @@ export async function requireClientAccess(clientId: string) {
  * callers don't need to handle these specifically.)
  */
 export async function requireClientAccessBySlug(slug: string) {
-  const client = await prisma.client.findUnique({
-    where: { uniqueSlug: slug },
+  const client = await prisma.client.findFirst({
+    where: { uniqueSlug: slug, deletedAt: null },
     select: { id: true },
   })
   if (!client) {

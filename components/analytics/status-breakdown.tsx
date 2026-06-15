@@ -20,7 +20,7 @@ const COLORS: Record<SubmissionStatus, string> = {
 }
 
 export function StatusBreakdown({ breakdown }: { breakdown: StatusBreakdown }) {
-  const total = ORDER.reduce((sum, s) => sum + breakdown[s], 0)
+  const total = ORDER.reduce((sum, s) => sum + (breakdown[s] ?? 0), 0)
 
   if (total === 0) {
     return (

@@ -17,22 +17,30 @@ export async function proposeSlug(input: {
     `${slugify(input.companyName)}-${randomSlug(4)}`,
     randomSlug(8),
     randomSlug(12),
-  ]
+  ].filter(isValidSlug)
+
+  // Batch-check all candidates in 2 queries instead of 2×N.
+  const [existingInvites, existingClients] = await Promise.all([
+    prisma.invite.findMany({
+      where: { slug: { in: candidates } },
+      select: { slug: true },
+    }),
+    prisma.client.findMany({
+      where: { uniqueSlug: { in: candidates } },
+      select: { uniqueSlug: true },
+    }),
+  ])
+
+  const taken = new Set([
+    ...existingInvites.map((i) => i.slug),
+    ...existingClients.map((c) => c.uniqueSlug),
+  ])
 
   for (const c of candidates) {
-    if (!isValidSlug(c)) continue
-    if (await isSlugAvailable(c)) return c
+    if (!taken.has(c)) return c
   }
   // randomSlug(12) gives 36^12 ≈ 4.7e18 options; this is unreachable.
   throw new Error('Failed to generate a unique slug')
-}
-
-async function isSlugAvailable(slug: string): Promise<boolean> {
-  const [invite, client] = await Promise.all([
-    prisma.invite.findUnique({ where: { slug }, select: { id: true } }),
-    prisma.client.findUnique({ where: { uniqueSlug: slug }, select: { id: true } }),
-  ])
-  return !invite && !client
 }
 
 export type InviteForRegistration = {

@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
 import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 
 export type ClientDTO = {
   id: string
@@ -46,24 +47,48 @@ async function toDTO(c: {
   }
 }
 
-export async function listAllClients(): Promise<ClientDTO[]> {
+export async function listAllClients(params?: PaginationParams): Promise<PaginatedResult<ClientDTO>> {
   await requireRole('SUPER_ADMIN')
-  const rows = await prisma.client.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      _count: { select: { submissions: true, comments: true, files: true } },
-      submissions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { updatedAt: true } },
-    },
-  })
-  return Promise.all(rows.map(toDTO))
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.client.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        _count: {
+          select: {
+            submissions: { where: { deletedAt: null } },
+            comments: { where: { deletedAt: null } },
+            files: { where: { deletedAt: null } },
+          },
+        },
+        submissions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { updatedAt: true } },
+      },
+      take,
+      skip,
+    }),
+    prisma.client.count({
+      where: { deletedAt: null },
+    }),
+  ])
+
+  const items = await Promise.all(rows.map(toDTO))
+  return toPaginated(items, total, params)
 }
 
 export const getClientDTO = cache(async (clientId: string): Promise<ClientDTO | null> => {
   await requireClientAccess(clientId)
   const c = await prisma.client.findUnique({
-    where: { id: clientId },
+    where: { id: clientId, deletedAt: null },
     include: {
-      _count: { select: { submissions: true, comments: true, files: true } },
+      _count: {
+        select: {
+          submissions: { where: { deletedAt: null } },
+          comments: { where: { deletedAt: null } },
+          files: { where: { deletedAt: null } },
+        },
+      },
       submissions: { orderBy: { updatedAt: 'desc' }, take: 1, select: { updatedAt: true } },
     },
   })

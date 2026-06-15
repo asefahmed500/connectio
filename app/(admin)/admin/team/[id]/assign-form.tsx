@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -22,21 +22,35 @@ export function AssignClientForm({
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [selectedClientId, setSelectedClientId] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   return (
     <form
       action={(formData) => {
+        if (!selectedClientId) return
+        setError(null)
         startTransition(async () => {
-          await assignAction(formData)
-          router.refresh()
+          try {
+            await assignAction(formData)
+            router.refresh()
+            setSelectedClientId('')
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to assign')
+          }
         })
       }}
       className="border-t pt-4 space-y-2"
     >
       <input type="hidden" name="teamMemberId" value={teamMemberId} />
+      <input type="hidden" name="clientId" value={selectedClientId} />
       <Label htmlFor="clientId">Assign to client</Label>
       <div className="flex gap-2">
-        <Select name="clientId" required>
+        <Select
+          required
+          value={selectedClientId}
+          onValueChange={setSelectedClientId}
+        >
           <SelectTrigger id="clientId" className="flex-1">
             <SelectValue placeholder="Choose a client…" />
           </SelectTrigger>
@@ -48,10 +62,11 @@ export function AssignClientForm({
             ))}
           </SelectContent>
         </Select>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || !selectedClientId}>
           {pending ? 'Assigning…' : 'Assign'}
         </Button>
       </div>
+      {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
     </form>
   )
 }

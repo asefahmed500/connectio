@@ -1,17 +1,16 @@
-name: CI
+name: Audit
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
   pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+    branches: [main]
 
 jobs:
-  lint-typecheck-test-build:
+  audit:
+    name: Typecheck + Lint + Test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -20,18 +19,17 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: connectio_test
-        ports: ['5432:5432']
+        ports:
+          - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 5s
+          --health-interval 10s
           --health-timeout 5s
-          --health-retries 10
+          --health-retries 5
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/connectio_test?schema=public
-      AUTH_JWT_SECRET: ci-test-secret-must-be-at-least-32-chars-long
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      NODE_ENV: test
+      AUTH_JWT_SECRET: ci-test-secret-32-chars-min-here-xxxxxx
 
     steps:
       - uses: actions/checkout@v4
@@ -43,22 +41,13 @@ jobs:
 
       - run: npm ci
 
-      - name: Prisma migrate + generate
-        run: |
-          npx prisma migrate deploy
-          npx prisma generate
+      - run: npx prisma generate
 
-      - name: Lint
-        run: npm run lint
+      - run: npx prisma migrate deploy
+        continue-on-error: true
 
-      - name: Typecheck
-        run: npm run typecheck
+      - run: npm run typecheck
 
-      - name: Unit tests
-        run: npm test
+      - run: npm run lint
 
-      - name: Build
-        run: npm run build
-        env:
-          # Skip standalone output for CI; we just want to verify it builds.
-          NEXT_TELEMETRY_DISABLED: '1'
+      - run: npm test

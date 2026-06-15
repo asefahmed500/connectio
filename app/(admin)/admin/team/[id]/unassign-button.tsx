@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { unassignAction } from './actions'
@@ -14,18 +14,25 @@ export function UnassignButton({
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   return (
     <form
       action={() => {
+        setError(null)
         startTransition(async () => {
-          await unassignAction(teamMemberId, clientId)
-          router.refresh()
+          try {
+            await unassignAction(teamMemberId, clientId)
+            router.refresh()
+          } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to unassign')
+          }
         })
       }}
     >
       <Button type="submit" variant="ghost" size="sm" disabled={pending}>
         {pending ? 'Removing…' : 'Unassign'}
       </Button>
+      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
     </form>
   )
 }

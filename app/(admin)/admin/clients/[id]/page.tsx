@@ -9,8 +9,8 @@ import { CommentThread } from '@/components/comments/comment-thread'
 export const metadata = { title: 'Client — ClientConnect' }
 
 export async function generateStaticParams() {
-  const clients = await listAllClients().catch(() => [])
-  return clients.map((c) => ({ id: c.id }))
+  const result = await listAllClients().catch(() => ({ items: [] }))
+  return result.items.map((c) => ({ id: c.id }))
 }
 
 export default async function AdminClientDetailPage({
@@ -24,12 +24,12 @@ export default async function AdminClientDetailPage({
 
   const [submissions, comments, files] = await Promise.all([
     prisma.submission.findMany({
-      where: { clientId: id },
+      where: { clientId: id, deletedAt: null },
       include: { form: { select: { title: true, formSchema: true } } },
       orderBy: { updatedAt: 'desc' },
     }),
-    prisma.comment.count({ where: { clientId: id, isInternal: false } }),
-    prisma.file.count({ where: { clientId: id } }),
+    prisma.comment.count({ where: { clientId: id, isInternal: false, deletedAt: null } }),
+    prisma.file.count({ where: { clientId: id, deletedAt: null } }),
   ])
 
   return (

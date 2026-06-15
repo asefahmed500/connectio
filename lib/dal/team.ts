@@ -2,6 +2,7 @@ import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
 import { requireRole } from '@/lib/dal/session'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 
 export type TeamMemberDTO = {
   id: string
@@ -13,16 +14,25 @@ export type TeamMemberDTO = {
   createdAt: Date
 }
 
-export async function listAllTeamMembers(): Promise<TeamMemberDTO[]> {
+export async function listAllTeamMembers(params?: PaginationParams): Promise<PaginatedResult<TeamMemberDTO>> {
   await requireRole('SUPER_ADMIN')
-  const rows = await prisma.teamMember.findMany({
-    include: {
-      user: { select: { name: true, email: true } },
-      _count: { select: { assignments: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  })
-  return rows.map((r) => ({
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.teamMember.findMany({
+      where: { deletedAt: null },
+      include: {
+        user: { select: { name: true, email: true } },
+        _count: { select: { assignments: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.teamMember.count({ where: { deletedAt: null } }),
+  ])
+
+  const items = rows.map((r) => ({
     id: r.id,
     userId: r.userId,
     name: r.user.name,
@@ -31,12 +41,14 @@ export async function listAllTeamMembers(): Promise<TeamMemberDTO[]> {
     assignedClientCount: r._count.assignments,
     createdAt: r.createdAt,
   }))
+
+  return toPaginated(items, total, params)
 }
 
 export const getTeamMemberDTO = cache(async (teamMemberId: string) => {
   await requireRole('SUPER_ADMIN')
-  const r = await prisma.teamMember.findUnique({
-    where: { id: teamMemberId },
+  const r = await prisma.teamMember.findFirst({
+    where: { id: teamMemberId, deletedAt: null },
     include: {
       user: { select: { name: true, email: true } },
       assignments: { include: { client: { select: { id: true, companyName: true, uniqueSlug: true } } } },
@@ -104,14 +116,14 @@ export async function assignTeamToClient(opts: {
   teamMemberId: string
 }): Promise<void> {
   const admin = await requireRole('SUPER_ADMIN')
-  const teamMember = await prisma.teamMember.findUnique({
-    where: { id: opts.teamMemberId },
+  const teamMember = await prisma.teamMember.findFirst({
+    where: { id: opts.teamMemberId, deletedAt: null },
     select: { id: true, userId: true },
   })
   if (!teamMember) throw new Error('Team member not found')
 
-  const client = await prisma.client.findUnique({
-    where: { id: opts.clientId },
+  const client = await prisma.client.findFirst({
+    where: { id: opts.clientId, deletedAt: null },
     select: { id: true, companyName: true },
   })
   if (!client) throw new Error('Client not found')

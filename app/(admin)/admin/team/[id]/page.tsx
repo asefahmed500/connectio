@@ -18,7 +18,7 @@ export default async function TeamMemberDetailPage({
 
   // All clients not currently assigned — for the assignment dropdown.
   const unassigned = await prisma.client.findMany({
-    where: { assignments: { none: { teamMemberId: id } } },
+    where: { deletedAt: null, assignments: { none: { teamMemberId: id } } },
     orderBy: { companyName: 'asc' },
     select: { id: true, companyName: true, uniqueSlug: true },
   })

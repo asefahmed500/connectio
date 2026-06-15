@@ -14,7 +14,7 @@ export function RegisterForm({
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, undefined)
 
   return (
-    <form action={action} className="space-y-4">
+    <form action={action} className="space-y-4" noValidate>
       <input type="hidden" name="slug" value={invite.slug} />
 
       <div className="space-y-2">

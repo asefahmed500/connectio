@@ -20,7 +20,7 @@ export default async function NewSubmissionPage({
   const clientId = await requireClientAccessBySlug(slug)
 
   const form = await prisma.form.findFirst({
-    where: { id: formId, isActive: true },
+    where: { id: formId, isActive: true, deletedAt: null },
   })
   if (!form) notFound()
   parseFormSchema(form.formSchema as unknown) // sanity: schema must be valid

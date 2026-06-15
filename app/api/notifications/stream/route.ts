@@ -1,6 +1,8 @@
-// SSE endpoint for real-time notifications. Polls the DB every 8s for new rows
-// since the last delivered id and pushes them to the client. Heartbeat every
-// 25s keeps the connection alive through proxies.
+// SSE endpoint for real-time notifications. Polls the DB every 8s and pushes
+// new rows since the last delivered timestamp. Each connection tracks its own
+// cursor so polls only fetch new notifications, avoiding overlap with the
+// initial replay. Heartbeat every 25s keeps the connection alive through
+// proxies.
 //
 // Limitation: each connection costs a DB query per poll. For >500 concurrent
 // streams, swap to Redis pub/sub (see docs/14-notifications.md §6).
@@ -23,6 +25,9 @@ export async function GET(req: Request) {
 
   const enc = new TextEncoder()
   let closed = false
+  // Per-connection cursor: the latest createdAt we've sent. Polls only fetch
+  // rows newer than this. Starts from the Last-Event-ID header or last minute.
+  let lastSentAt: Date
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -34,14 +39,17 @@ export async function GET(req: Request) {
 
       // Replay missed notifications since Last-Event-ID (or last minute).
       const lastEventIdHeader = req.headers.get('last-event-id')
-      const since = lastEventIdHeader
-        ? new Date(Number(lastEventIdHeader))
+      const timestamp = Number(lastEventIdHeader)
+      lastSentAt = Number.isFinite(timestamp) && timestamp > 0
+        ? new Date(timestamp)
         : new Date(Date.now() - 60_000)
 
       try {
-        const initial = await listNotificationsSince(since)
+        const initial = await listNotificationsSince(lastSentAt)
         for (const n of initial) {
           send(JSON.stringify(n), new Date(n.createdAt).getTime().toString())
+          const ts = new Date(n.createdAt)
+          if (ts > lastSentAt) lastSentAt = ts
         }
       } catch (err) {
         console.error('[notifications/stream] initial fetch failed:', err)
@@ -50,13 +58,11 @@ export async function GET(req: Request) {
       const poll = async () => {
         if (closed) return
         try {
-          const cutoff = lastEventIdHeader
-            ? new Date(Number(lastEventIdHeader))
-            : since
-          void cutoff // not used after first poll; we'd track per-conn state in v2
-          const fresh = await listNotificationsSince(new Date(Date.now() - POLL_INTERVAL_MS - 500))
+          const fresh = await listNotificationsSince(lastSentAt)
           for (const n of fresh) {
             send(JSON.stringify(n), new Date(n.createdAt).getTime().toString())
+            const ts = new Date(n.createdAt)
+            if (ts > lastSentAt) lastSentAt = ts
           }
         } catch (err) {
           console.error('[notifications/stream] poll failed:', err)
@@ -72,14 +78,8 @@ export async function GET(req: Request) {
         closed = true
         clearInterval(pollTimer)
         clearInterval(heartbeatTimer)
-        try {
-          controller.close()
-        } catch {
-          // Already closed.
-        }
+        try { controller.close() } catch { /* already closed */ }
       })
-
-      void user // pin the auth check
     },
     cancel() {
       closed = true
@@ -90,7 +90,7 @@ export async function GET(req: Request) {
     headers: {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     },
   })
