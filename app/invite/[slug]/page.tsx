@@ -15,8 +15,8 @@ export default async function InvitePage({
 
   return (
     <div className="min-h-screen grid place-items-center bg-muted/30 px-4 py-12">
-      <div className="w-full max-w-md space-y-6">
-        <div className="space-y-2 text-center">
+      <div className="w-full max-w-md flex flex-col gap-6">
+        <div className="flex flex-col gap-2 text-center">
           <h1 className="text-2xl font-semibold tracking-tight">Welcome to ClientConnect</h1>
           <p className="text-sm text-muted-foreground">
             You&apos;ve been invited to set up an account for{' '}

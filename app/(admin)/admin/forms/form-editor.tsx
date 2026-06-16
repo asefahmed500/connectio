@@ -85,8 +85,8 @@ export function FormEditor({
   }
 
   return (
-    <form action={onSubmit} className="space-y-5">
-      <div className="space-y-2">
+    <form action={onSubmit} className="flex flex-col gap-5">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="title">Title</Label>
         <Input
           id="title"
@@ -99,7 +99,7 @@ export function FormEditor({
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="description">Description (optional)</Label>
         <Input
           id="description"
@@ -126,7 +126,7 @@ export function FormEditor({
       </div>
 
       {useJson ? (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           <Textarea
             name="schema"
             required
@@ -158,7 +158,7 @@ export function FormEditor({
         <p className="text-sm text-destructive" role="alert">{state.error}</p>
       )}
       {state && 'fields' in state && state.fields && (
-        <ul className="text-sm text-destructive list-disc pl-5 space-y-1" role="alert">
+        <ul className="text-sm text-destructive list-disc pl-5 flex flex-col gap-1" role="alert">
           {Object.entries(state.fields).map(([k, v]) => (
             <li key={k}><code>{k}</code>: {(v as string[]).join(' ')}</li>
           ))}

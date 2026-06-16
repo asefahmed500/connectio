@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
 import { deleteFileAction } from './actions'
 
 export function UploadForm({ clientId }: { clientId: string }) {
@@ -42,8 +43,10 @@ export function UploadForm({ clientId }: { clientId: string }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="border rounded-lg p-4 space-y-3">
-      <div className="space-y-1.5">
+    <form onSubmit={onSubmit} noValidate>
+      <Card>
+        <CardContent className="p-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="file">Upload a file</Label>
         <input
           id="file"
@@ -60,6 +63,8 @@ export function UploadForm({ clientId }: { clientId: string }) {
       <Button type="submit" disabled={pending}>
         {pending ? 'Uploading…' : 'Upload'}
       </Button>
+        </CardContent>
+      </Card>
     </form>
   )
 }

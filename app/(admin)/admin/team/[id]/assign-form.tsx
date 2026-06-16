@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import { assignAction } from './actions'
 
 export function AssignClientForm({
@@ -26,22 +27,24 @@ export function AssignClientForm({
   const [error, setError] = useState<string | null>(null)
 
   return (
-    <form
-      action={(formData) => {
-        if (!selectedClientId) return
-        setError(null)
-        startTransition(async () => {
-          try {
-            await assignAction(formData)
-            router.refresh()
-            setSelectedClientId('')
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to assign')
-          }
-        })
-      }}
-      className="border-t pt-4 space-y-2"
-    >
+    <>
+      <Separator />
+      <form
+        action={(formData) => {
+          if (!selectedClientId) return
+          setError(null)
+          startTransition(async () => {
+            try {
+              await assignAction(formData)
+              router.refresh()
+              setSelectedClientId('')
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'Failed to assign')
+            }
+          })
+        }}
+        className="flex flex-col gap-2 pt-4"
+      >
       <input type="hidden" name="teamMemberId" value={teamMemberId} />
       <input type="hidden" name="clientId" value={selectedClientId} />
       <Label htmlFor="clientId">Assign to client</Label>
@@ -68,5 +71,6 @@ export function AssignClientForm({
       </div>
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
     </form>
+    </>
   )
 }

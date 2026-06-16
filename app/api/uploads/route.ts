@@ -12,6 +12,7 @@ import {
   isAllowedMime,
   matchesMagic,
   guessExtension,
+  extensionOf,
   sanitizeFilename,
 } from '@/lib/uploads/validate'
 import { generateCuid } from '@/lib/cuid'
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   if (!isAllowedMime(file.type)) {
     return NextResponse.json({ error: `MIME type not allowed: ${file.type}` }, { status: 400 })
   }
-  if (!isAllowedExtension(file.name)) {
+  if (!isAllowedExtension(extensionOf(file.name))) {
     return NextResponse.json(
       { error: `File extension not allowed: ${file.name}` },
       { status: 400 },
@@ -100,10 +101,9 @@ export async function POST(req: Request) {
       targetPath: storageKey,
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: 'Upload failed', detail: err instanceof Error ? err.message : 'unknown' },
-      { status: 500 },
-    )
+    // Don't echo storage/FS internals to the client — log them server-side only.
+    console.error('[uploads] storage.put failed:', err)
+    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
   }
 
   if (stored.size !== BigInt(file.size)) {

@@ -59,15 +59,15 @@ export function SubmissionForm({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {!canEdit && (
-        <div className="border-l-4 border-amber-400 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm rounded-r-md">
+        <div className="border-l-4 border-amber-400 bg-amber-50 p-3 text-sm rounded-r-md">
           This submission is <strong>{status.replace('_', ' ').toLowerCase()}</strong> and
           can&apos;t be edited. Contact your account team if changes are needed.
         </div>
       )}
 
-      <form action={formAction} className="space-y-5" noValidate>
+      <form action={formAction} className="flex flex-col gap-5" noValidate>
         <input type="hidden" name="submissionId" value={submissionId} />
         <input type="hidden" name="clientId" value={clientId} />
         <input type="hidden" name="formId" value={formId} />
@@ -89,7 +89,7 @@ export function SubmissionForm({
           </p>
         )}
         {state && 'fields' in state && state.fields && (
-          <ul className="text-sm text-destructive list-disc pl-5 space-y-1" role="alert">
+          <ul className="text-sm text-destructive list-disc pl-5 flex flex-col gap-1" role="alert">
             {Object.entries(state.fields).map(([k, v]) => (
               <li key={k}>
                 <code>{k}</code>: {(v as string[]).join(' ')}

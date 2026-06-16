@@ -154,67 +154,93 @@ export async function submit(opts: {
   formData: Record<string, unknown>
 }): Promise<SubmissionDTO> {
   const { clientId, formId, formData } = opts
-  await requireClientAccess(clientId)
+  const user = await requireClientAccess(clientId)
 
   enforceSizeLimit(formData)
 
-  // Verify there's an active form — defense in depth.
-  const form = await prisma.form.findFirstOrThrow({
-    where: { id: formId, isActive: true, deletedAt: null },
-  })
-
-  // Lazy-validate the existing draft's state — only DRAFT and CHANGES_REQUESTED
-  // can transition to SUBMITTED.
-  const existing = await prisma.submission.findFirst({
-    where: { clientId, formId, deletedAt: null },
-  })
-  if (existing && !canTransition(existing.status, 'SUBMITTED')) {
-    throw new Error(`Cannot submit from status ${existing.status}`)
-  }
-
-  const now = new Date()
-  const upserted = await prisma.submission.upsert({
-    where: { clientId_formId: { clientId, formId } },
-    create: {
-      clientId,
-      formId,
-      formData: formData as Prisma.InputJsonValue,
-      status: 'SUBMITTED',
-      submittedAt: now,
-    },
-    update: {
-      formData: formData as Prisma.InputJsonValue,
-      status: 'SUBMITTED',
-      submittedAt: now,
-      // Clear any prior review fields — this is a fresh submission.
-      reviewedBy: null,
-      reviewedAt: null,
-    },
-    include: { form: { select: { title: true } } },
-  })
-  void form // satisfy lints
-
-  const { writeAudit } = await import('@/lib/audit')
-  const user = await getCurrentUser()
-  if (user) {
-    await writeAudit({
-      action: 'SUBMISSION_SUBMITTED',
-      userId: user.id,
-      resource: 'Submission',
-      resourceId: upserted.id,
+  // Check + write happen in one transaction so a concurrent updateStatus can't
+  // flip the status between the canTransition guard and the upsert (TOCTOU),
+  // and so the audit row can never diverge from the business data. Mirrors
+  // updateStatus() below. notify() stays fire-and-forget outside the tx.
+  const upserted = await prisma.$transaction(async (tx) => {
+    // Verify there's an active form — defense in depth.
+    await tx.form.findFirstOrThrow({
+      where: { id: formId, isActive: true, deletedAt: null },
     })
-  }
+
+    // Lazy-validate the existing draft's state — only DRAFT and
+    // CHANGES_REQUESTED can transition to SUBMITTED.
+    const existing = await tx.submission.findFirst({
+      where: { clientId, formId, deletedAt: null },
+    })
+    if (existing && !canTransition(existing.status, 'SUBMITTED')) {
+      throw new Error(`Cannot submit from status ${existing.status}`)
+    }
+
+    const now = new Date()
+    const row = await tx.submission.upsert({
+      where: { clientId_formId: { clientId, formId } },
+      create: {
+        clientId,
+        formId,
+        formData: formData as Prisma.InputJsonValue,
+        status: 'SUBMITTED',
+        submittedAt: now,
+      },
+      update: {
+        formData: formData as Prisma.InputJsonValue,
+        status: 'SUBMITTED',
+        submittedAt: now,
+        // Clear any prior review fields — this is a fresh submission.
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+      include: { form: { select: { title: true } } },
+    })
+
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit(
+      {
+        action: 'SUBMISSION_SUBMITTED',
+        userId: user!.id,
+        resource: 'Submission',
+        resourceId: row.id,
+      },
+      tx,
+    )
+
+    return row
+  })
 
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'SUBMISSION_SUBMITTED',
-    actorId: clientId, // no human actor for a client-side submit beyond the session; clientId is informative
+    actorId: user!.id,
     clientId,
     submissionId: upserted.id,
     formTitle: upserted.form.title,
   })
 
   return toDTO(upserted)
+}
+
+export type SubmissionWithSchemaDTO = SubmissionDTO & {
+  formSchema: unknown
+}
+
+export async function listSubmissionsWithSchema(clientId: string): Promise<SubmissionWithSchemaDTO[]> {
+  await requireClientAccess(clientId)
+
+  const rows = await prisma.submission.findMany({
+    where: { clientId, deletedAt: null },
+    include: { form: { select: { title: true, formSchema: true } } },
+    orderBy: { updatedAt: 'desc' },
+  })
+
+  return rows.map((s) => ({
+    ...toDTO(s),
+    formSchema: s.form.formSchema,
+  }))
 }
 
 export async function listSubmissionsForClient(

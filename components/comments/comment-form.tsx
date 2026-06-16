@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Separator } from '@/components/ui/separator'
 import { postCommentAction, type CommentFormState } from './actions'
 import type { UserRole } from '@prisma/client'
 
@@ -39,7 +40,9 @@ export function CommentForm({
   })
 
   return (
-    <form action={action} noValidate className="flex flex-col gap-3 pt-4 border-t">
+    <>
+      <Separator />
+      <form action={action} noValidate className="flex flex-col gap-3 pt-4">
       <input type="hidden" name="clientId" value={clientId} />
       {submissionId && <input type="hidden" name="submissionId" value={submissionId} />}
       <Field data-invalid={!!errors.message}>
@@ -70,5 +73,6 @@ export function CommentForm({
         {pending ? 'Posting…' : 'Post message'}
       </Button>
     </form>
+    </>
   )
 }

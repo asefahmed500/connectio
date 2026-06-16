@@ -9,8 +9,20 @@ import {
 import { BarChart } from '@/components/analytics/bar-chart'
 import { StatusBreakdown } from '@/components/analytics/status-breakdown'
 import { ActivityFeed } from '@/components/analytics/activity-feed'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Building2, Mail, FileText, Clock, MessageSquare, Upload } from 'lucide-react'
 
 export const metadata = { title: 'Admin dashboard — ClientConnect' }
+
+const STAT_ICONS = {
+  clients: Building2,
+  invites: Mail,
+  submissions: FileText,
+  pending: Clock,
+  comments: MessageSquare,
+  files: Upload,
+} as const
 
 export default async function AdminDashboard() {
   const [stats, breakdown, trend, activity, topClients] = await Promise.all([
@@ -22,10 +34,10 @@ export default async function AdminDashboard() {
   ])
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-3xl font-heading tracking-wide">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             Activity across all clients. Last 14 days.
           </p>
@@ -38,88 +50,92 @@ export default async function AdminDashboard() {
         </Link>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <Stat label="Clients" value={stats.totalClients} sub={`+${stats.clientsThisMonth} this month`} />
-        <Stat label="Open invites" value={stats.openInvites} />
-        <Stat label="Submissions" value={stats.totalSubmissions} />
-        <Stat label="Pending review" value={stats.pendingReview} highlight={stats.pendingReview > 0} />
-        <Stat label="Comments" value={stats.totalComments} />
-        <Stat label="Files" value={stats.totalFiles} />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Stat icon={STAT_ICONS.clients} label="Clients" value={stats.totalClients} sub={`+${stats.clientsThisMonth} this month`} />
+        <Stat icon={STAT_ICONS.invites} label="Open invites" value={stats.openInvites} />
+        <Stat icon={STAT_ICONS.submissions} label="Submissions" value={stats.totalSubmissions} />
+        <Stat icon={STAT_ICONS.pending} label="Pending review" value={stats.pendingReview} highlight />
+        <Stat icon={STAT_ICONS.comments} label="Comments" value={stats.totalComments} />
+        <Stat icon={STAT_ICONS.files} label="Files" value={stats.totalFiles} />
       </div>
 
-      {/* Trend + status */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Submissions (14 days)">
+        <DashCard title="Submissions (14 days)">
           <BarChart data={trend.map((b) => ({ label: b.label, value: b.count }))} />
-        </Card>
-        <Card title="Submission status">
+        </DashCard>
+        <DashCard title="Submission status">
           <StatusBreakdown breakdown={breakdown} />
-        </Card>
+        </DashCard>
       </div>
 
-      {/* Activity + top clients */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card title="Recent activity" className="lg:col-span-2">
+        <DashCard title="Recent activity" className="lg:col-span-2">
           <ActivityFeed items={activity} />
-        </Card>
-        <Card title="Top clients by activity">
+        </DashCard>
+        <DashCard title="Top clients by activity">
           {topClients.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">No clients yet.</p>
           ) : (
-            <ul className="space-y-2 text-sm">
+            <div className="divide-y">
               {topClients.map((c, i) => (
-                <li key={c.id} className="flex justify-between items-center gap-2">
-                  <div className="min-w-0">
-                    <span className="text-muted-foreground mr-2">{i + 1}</span>
+                <div key={c.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xs text-muted-foreground tabular-nums w-4 shrink-0">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
                     <Link
                       href={`/admin/clients/${c.id}`}
                       className="font-medium hover:underline truncate"
                     >
                       {c.companyName}
                     </Link>
-                    <div className="text-xs text-muted-foreground pl-6">
-                      {c.submissions} sub · {c.comments} msg · {c.files} file
-                    </div>
                   </div>
-                  <span className="text-xs font-medium tabular-nums shrink-0">
-                    {c.activityScore}
-                  </span>
-                </li>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {c.submissions} sub · {c.comments} msg · {c.files} file
+                    </span>
+                    <span className="text-xs font-medium tabular-nums text-primary">
+                      {c.activityScore}
+                    </span>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
-        </Card>
+        </DashCard>
       </div>
     </div>
   )
 }
 
 function Stat({
+  icon: Icon,
   label,
   value,
   sub,
   highlight,
 }: {
+  icon: React.ElementType
   label: string
   value: number
   sub?: string
   highlight?: boolean
 }) {
   return (
-    <div
-      className={`border rounded-lg p-3 ${
-        highlight ? 'border-primary/50 bg-primary/5' : ''
-      }`}
-    >
-      <div className="text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="text-2xl font-semibold mt-0.5 tabular-nums">{value}</div>
-      {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
-    </div>
+    <Card className={highlight ? 'border-primary/50 bg-primary/5' : ''}>
+      <CardHeader className="p-3 pb-1">
+        <CardDescription className="flex items-center gap-1.5">
+          <Icon className="size-3.5" />
+          {label}
+        </CardDescription>
+        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      </CardHeader>
+    </Card>
   )
 }
 
-function Card({
+function DashCard({
   title,
   className,
   children,
@@ -129,9 +145,11 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <div className={`border rounded-lg p-4 ${className ?? ''}`}>
-      <h2 className="text-sm font-semibold mb-3">{title}</h2>
-      {children}
-    </div>
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle className="text-sm font-heading tracking-wide">{title}</CardTitle>
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   )
 }

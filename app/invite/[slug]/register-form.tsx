@@ -14,10 +14,10 @@ export function RegisterForm({
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, undefined)
 
   return (
-    <form action={action} className="space-y-4" noValidate>
+    <form action={action} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="slug" value={invite.slug} />
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="email">Email</Label>
         <Input id="email" name="email" type="email" defaultValue={invite.email} required />
         <p className="text-xs text-muted-foreground">
@@ -25,12 +25,12 @@ export function RegisterForm({
         </p>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="name">Your name</Label>
         <Input id="name" name="name" defaultValue={invite.contactName} required />
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" required minLength={12} />
         <p className="text-xs text-muted-foreground">

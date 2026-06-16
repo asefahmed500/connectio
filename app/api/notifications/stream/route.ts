@@ -58,6 +58,18 @@ export async function GET(req: Request) {
       const poll = async () => {
         if (closed) return
         try {
+          // Re-auth check every poll: close the stream if the user's token
+          // was revoked (e.g. password reset, admin block). This prevents
+          // stale sessions from receiving notifications indefinitely.
+          const currentUser = await getCurrentUser()
+          if (!currentUser || currentUser.id !== user.id) {
+            closed = true
+            controller.enqueue(enc.encode(`event: close\ndata: session expired\n\n`))
+            clearInterval(pollTimer)
+            clearInterval(heartbeatTimer)
+            try { controller.close() } catch { /* already closed */ }
+            return
+          }
           const fresh = await listNotificationsSince(lastSentAt)
           for (const n of fresh) {
             send(JSON.stringify(n), new Date(n.createdAt).getTime().toString())

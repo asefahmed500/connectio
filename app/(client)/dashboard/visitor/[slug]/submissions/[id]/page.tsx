@@ -25,7 +25,7 @@ export default async function SubmissionPage({
   const canEdit = sub.status === 'DRAFT' || sub.status === 'CHANGES_REQUESTED'
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">{form.title}</h1>
         {form.description && (

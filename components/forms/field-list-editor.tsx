@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Trash2, GripVertical } from 'lucide-react'
 
 export type FieldDef = {
@@ -79,23 +80,25 @@ export function FieldListEditor({
     type === 'select' || type === 'multiselect' || type === 'radio'
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-semibold">Form fields</Label>
         <Button type="button" variant="outline" size="sm" onClick={addField}>
-          <Plus className="size-3.5 mr-1" /> Add field
+          <Plus data-icon="inline-start" /> Add field
         </Button>
       </div>
 
       {fields.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">
+        <Card>
+          <CardContent className="p-4 text-center text-sm text-muted-foreground">
           No fields yet. Click &ldquo;Add field&rdquo; to start building your form.
-        </p>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         {fields.map((field, index) => (
-          <div key={field.key || `field-${index}`} className="border rounded-lg p-3 space-y-2 bg-muted/10">
+          <div key={field.key || `field-${index}`} className="border rounded-lg p-3 flex flex-col gap-2 bg-muted/10">
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground tabular-nums w-5">{index + 1}</span>
               <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -130,7 +133,7 @@ export function FieldListEditor({
                   onClick={() => moveField(index, -1)}
                   aria-label="Move up"
                 >
-                  <GripVertical className="size-3.5" />
+                  <GripVertical data-icon="inline-start" />
                 </Button>
                 <Button
                   type="button"
@@ -139,7 +142,7 @@ export function FieldListEditor({
                   onClick={() => removeField(index)}
                   aria-label="Remove field"
                 >
-                  <Trash2 className="size-3.5 text-destructive" />
+                  <Trash2 data-icon="inline-start" className="text-destructive" />
                 </Button>
               </div>
             </div>

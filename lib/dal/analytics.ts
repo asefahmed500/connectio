@@ -3,6 +3,28 @@ import { prisma } from '@/lib/db'
 import { requireRole } from '@/lib/dal/session'
 import type { SubmissionStatus } from '@prisma/client'
 
+export type SystemOverview = {
+  totalUsers: number
+  totalForms: number
+  totalInvites: number
+  totalSubmissions: number
+  totalFiles: number
+  totalComments: number
+}
+
+export async function getSystemOverview(): Promise<SystemOverview> {
+  await requireRole('SUPER_ADMIN')
+  const [totalUsers, totalForms, totalInvites, totalSubmissions, totalFiles, totalComments] = await Promise.all([
+    prisma.user.count(),
+    prisma.form.count({ where: { deletedAt: null } }),
+    prisma.invite.count(),
+    prisma.submission.count({ where: { deletedAt: null } }),
+    prisma.file.count({ where: { deletedAt: null } }),
+    prisma.comment.count({ where: { deletedAt: null } }),
+  ])
+  return { totalUsers, totalForms, totalInvites, totalSubmissions, totalFiles, totalComments }
+}
+
 // Aggregations for the admin dashboard. None of these hit >~10ms at the row
 // counts we expect for v1 (low thousands). The point at which to introduce
 // materialized views is roughly 100k submissions — flagged in REVIEW.md §2.6.

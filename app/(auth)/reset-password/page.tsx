@@ -5,9 +5,9 @@ export const metadata = { title: 'Reset password — ClientConnect' }
 
 export default function ForgotPasswordPage() {
   return (
-    <div className="min-h-screen grid place-items-center px-4">
+    <div className="min-h-screen grid place-items-center bg-gradient-to-b from-background to-muted/50 px-4">
       <div className="w-full max-w-sm">
-        <Suspense fallback={<div className="text-sm text-muted-foreground text-center">Loading…</div>}>
+        <Suspense fallback={<div className="text-sm text-muted-foreground text-center py-8">Loading…</div>}>
           <ForgotPasswordForm />
         </Suspense>
       </div>

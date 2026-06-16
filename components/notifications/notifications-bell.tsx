@@ -24,7 +24,7 @@ export function NotificationsBell({ enabled }: { enabled: boolean }) {
           aria-label={`Notifications${unread > 0 ? ` (${unread} unread)` : ''}`}
           className="relative"
         >
-          <Bell className="size-4" />
+          <Bell data-icon="inline-start" />
           {unread > 0 && (
             <span className="absolute -top-0.5 -right-0.5 bg-destructive text-destructive-foreground text-[10px] font-medium leading-none rounded-full min-w-4 h-4 px-1 grid place-items-center">
               {unread > 99 ? '99+' : unread}
@@ -63,7 +63,7 @@ export function NotificationsBell({ enabled }: { enabled: boolean }) {
                 <Link
                   href={n.href}
                   onClick={() => setOpen(false)}
-                  className="block space-y-0.5 hover:bg-muted/40 -mx-3 -my-2 px-3 py-2"
+                  className="block flex flex-col gap-0.5 hover:bg-muted/40 -mx-3 -my-2 px-3 py-2"
                 >
                   <div className="text-sm font-medium leading-tight">{n.title}</div>
                   <div className="text-xs text-muted-foreground line-clamp-2">{n.body}</div>

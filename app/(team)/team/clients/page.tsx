@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getCurrentUser } from '@/lib/dal/session'
-import { prisma } from '@/lib/db'
+import { listTeamAssignments } from '@/lib/dal/team'
+import { Card, CardContent } from '@/components/ui/card'
 
 export const metadata = { title: 'My clients — ClientConnect' }
 
@@ -8,60 +9,50 @@ export default async function TeamClientsPage() {
   const user = await getCurrentUser()
   if (!user?.teamMember) return null
 
-  const assignments = await prisma.teamAssignment.findMany({
-    where: { teamMemberId: user.teamMember.id },
-    include: {
-      client: {
-        select: {
-          id: true,
-          companyName: true,
-          uniqueSlug: true,
-          contactName: true,
-          _count: { select: { submissions: true, comments: true, files: true } },
-        },
-      },
-    },
-    orderBy: { assignedAt: 'desc' },
-  })
+  const assignments = await listTeamAssignments(user.teamMember.id)
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">My clients</h1>
+        <h1 className="text-3xl font-heading tracking-wide">My clients</h1>
         <p className="text-sm text-muted-foreground">
           Clients assigned to you. Ask an admin if a client is missing.
         </p>
       </div>
 
       {assignments.length === 0 ? (
-        <div className="border rounded-lg p-8 text-center">
-          <p className="text-sm text-muted-foreground">You have no assigned clients yet.</p>
-        </div>
+        <Card>
+          <CardContent className="p-6 text-center text-sm text-muted-foreground">
+            You have no assigned clients yet.
+          </CardContent>
+        </Card>
       ) : (
-        <ul className="space-y-3">
+        <div className="flex flex-col gap-3">
           {assignments.map((a) => (
-            <li key={a.id} className="border rounded-lg p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <Link
-                    href={`/team/clients/${a.client.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    {a.client.companyName}
-                  </Link>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {a.client.contactName} · /{a.client.uniqueSlug}
+            <Card key={a.id}>
+              <CardContent className="p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <Link
+                      href={`/team/clients/${a.clientId}`}
+                      className="font-medium hover:underline"
+                    >
+                      {a.companyName}
+                    </Link>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {a.contactName} · /{a.uniqueSlug}
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground text-right">
+                    <div>{a.submissionsCount} submissions</div>
+                    <div>{a.commentsCount} messages</div>
+                    <div>{a.filesCount} files</div>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground text-right">
-                  <div>{a.client._count.submissions} submissions</div>
-                  <div>{a.client._count.comments} messages</div>
-                  <div>{a.client._count.files} files</div>
-                </div>
-              </div>
-            </li>
+              </CardContent>
+            </Card>
           ))}
-        </ul>
+        </div>
       )}
     </div>
   )

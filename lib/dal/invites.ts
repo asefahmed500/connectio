@@ -1,6 +1,8 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { slugify, isValidSlug, randomSlug } from '@/lib/slug'
+import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
+import { requireRole } from '@/lib/dal/session'
 
 /**
  * Proposes a unique slug for an invite. Tries contact name → company name →
@@ -54,6 +56,34 @@ export type InviteForRegistration = {
  * Returns the invite if it's usable for registration. Lazily marks OPEN invites
  * past their expiresAt as EXPIRED. Returns null otherwise.
  */
+export type InviteDTO = {
+  id: string
+  email: string
+  companyName: string
+  contactName: string
+  slug: string
+  status: string
+  createdBy: string
+  createdAt: Date
+  expiresAt: Date
+}
+
+export async function listInvites(params?: PaginationParams): Promise<PaginatedResult<InviteDTO>> {
+  await requireRole('SUPER_ADMIN')
+  const { take, skip } = paginationParams(params)
+
+  const [rows, total] = await Promise.all([
+    prisma.invite.findMany({
+      orderBy: { createdAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.invite.count(),
+  ])
+
+  return toPaginated(rows, total, params)
+}
+
 export async function getInviteForRegistration(
   slug: string,
 ): Promise<InviteForRegistration | null> {

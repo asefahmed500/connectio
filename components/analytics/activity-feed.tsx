@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { FileText, MessageSquare, Paperclip } from 'lucide-react'
 import type { ActivityItem } from '@/lib/dal/analytics'
+import { Badge } from '@/components/ui/badge'
 
 export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   if (items.length === 0) {
@@ -12,7 +13,7 @@ export function ActivityFeed({ items }: { items: ActivityItem[] }) {
   }
 
   return (
-    <ul className="space-y-2">
+    <ul className="flex flex-col gap-2">
       {items.map((item, idx) => (
         <li key={`${item.kind}-${idx}`} className="flex gap-3 text-sm">
           <div className="mt-0.5 shrink-0">
@@ -66,9 +67,7 @@ function ActivityText({ item }: { item: ActivityItem }) {
           {item.authorRole?.replace('_', ' ')}
         </span>
         {item.isInternal && (
-          <span className="ml-1 text-xs px-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-            internal
-          </span>
+          <Badge variant="outline" className="ml-1">internal</Badge>
         )}
         : &ldquo;{item.messagePreview}&rdquo;
       </span>

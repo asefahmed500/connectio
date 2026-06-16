@@ -24,7 +24,7 @@ export default async function EditFormPage({
   })
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="flex flex-col gap-8 max-w-3xl">
       <div>
         <Link href="/admin/forms" className="text-sm text-muted-foreground hover:text-foreground">
           ← Back to forms
@@ -43,7 +43,7 @@ export default async function EditFormPage({
 
       <div>
         <h2 className="text-lg font-semibold mb-2">Field preview</h2>
-        <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
+        <div className="border rounded-lg p-4 flex flex-col gap-3 bg-muted/20">
           {form.schema.fields.map((f) => (
             <FieldPreview key={f.name} field={f} />
           ))}
@@ -55,7 +55,7 @@ export default async function EditFormPage({
         {submissions.length === 0 ? (
           <p className="text-sm text-muted-foreground">No submissions yet.</p>
         ) : (
-          <ul className="space-y-2 text-sm">
+          <ul className="flex flex-col gap-2 text-sm">
             {submissions.map((s) => (
               <li key={s.id} className="border rounded p-3 flex justify-between">
                 <span>{s.client.companyName}</span>

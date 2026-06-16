@@ -7,6 +7,7 @@ import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Card, CardContent } from '@/components/ui/card'
 import { addTeamMemberAction, type AddTeamMemberState } from './actions'
 
 const schema = z.object({
@@ -35,7 +36,9 @@ export function AddTeamMemberForm() {
   })
 
   return (
-    <form action={action} noValidate className="border rounded-lg p-4 flex flex-col gap-3">
+    <form action={action} noValidate>
+      <Card>
+        <CardContent className="p-4 flex flex-col gap-3">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <Field data-invalid={!!errors.name}>
           <FieldLabel htmlFor="name">Full name</FieldLabel>
@@ -69,11 +72,13 @@ export function AddTeamMemberForm() {
         </ul>
       )}
       {state && 'success' in state && (
-        <p className="text-sm text-emerald-700 dark:text-emerald-400">Team member created.</p>
+        <p className="text-sm text-emerald-700">Team member created.</p>
       )}
       <Button type="submit" disabled={pending}>
         {pending ? 'Creating…' : 'Add team member'}
       </Button>
+        </CardContent>
+      </Card>
     </form>
   )
 }

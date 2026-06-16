@@ -20,7 +20,7 @@ export async function CommentThread({
   if (!viewer) return null
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <CommentList comments={comments} viewerRole={viewer.role} clientId={clientId} />
       <CommentForm
         clientId={clientId}

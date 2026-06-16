@@ -42,3 +42,14 @@ next-env.d.ts
 
 # local file storage (dev only)
 /storage
+
+# dev artifacts
+*.log
+/test-results/
+/playwright-report/
+
+# agent config (machine-local)
+.claude/
+.codex/
+.agents/
+.github/skills/

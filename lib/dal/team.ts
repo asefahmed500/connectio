@@ -1,7 +1,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole } from '@/lib/dal/session'
+import { requireRole, getCurrentUser } from '@/lib/dal/session'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 
 export type TeamMemberDTO = {
@@ -128,15 +128,18 @@ export async function assignTeamToClient(opts: {
   })
   if (!client) throw new Error('Client not found')
 
-  await prisma.teamAssignment.upsert({
+  const alreadyAssigned = await prisma.teamAssignment.findUnique({
     where: {
       teamMemberId_clientId: {
         teamMemberId: teamMember.id,
         clientId: client.id,
       },
     },
-    create: { teamMemberId: teamMember.id, clientId: client.id },
-    update: {}, // no-op if already assigned
+  })
+  if (alreadyAssigned) return
+
+  await prisma.teamAssignment.create({
+    data: { teamMemberId: teamMember.id, clientId: client.id },
   })
 
   const { notify } = await import('@/lib/notifications/notify')
@@ -154,6 +157,115 @@ export async function assignTeamToClient(opts: {
     userId: admin.id,
     resource: 'Client',
     resourceId: client.id,
+  })
+}
+
+export type TeamAssignmentDTO = {
+  id: string
+  clientId: string
+  companyName: string
+  uniqueSlug: string
+  contactName: string
+  submissionsCount: number
+  commentsCount: number
+  filesCount: number
+}
+
+export async function listTeamAssignments(teamMemberId: string): Promise<TeamAssignmentDTO[]> {
+  const user = await getCurrentUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // TEAM_MEMBER can only see their own assignments; SUPER_ADMIN can see any.
+  if (user.role === 'TEAM_MEMBER') {
+    const tm = await prisma.teamMember.findFirst({
+      where: { userId: user.id, deletedAt: null },
+      select: { id: true },
+    })
+    if (!tm || tm.id !== teamMemberId) throw new Error('Forbidden')
+  } else if (user.role !== 'SUPER_ADMIN') {
+    throw new Error('Forbidden')
+  }
+
+  const rows = await prisma.teamAssignment.findMany({
+    where: { teamMemberId },
+    include: {
+      client: {
+        select: {
+          id: true,
+          companyName: true,
+          uniqueSlug: true,
+          contactName: true,
+          _count: {
+            select: {
+              submissions: { where: { deletedAt: null } },
+              comments: { where: { deletedAt: null } },
+              files: { where: { deletedAt: null } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { assignedAt: 'desc' },
+  })
+
+  return rows.map((a) => ({
+    id: a.id,
+    clientId: a.client.id,
+    companyName: a.client.companyName,
+    uniqueSlug: a.client.uniqueSlug,
+    contactName: a.client.contactName,
+    submissionsCount: a.client._count.submissions,
+    commentsCount: a.client._count.comments,
+    filesCount: a.client._count.files,
+  }))
+}
+
+export async function listAssignedTeamMembers(clientId: string): Promise<{ id: string; teamMemberId: string; name: string; email: string }[]> {
+  await requireRole('SUPER_ADMIN')
+  const rows = await prisma.teamAssignment.findMany({
+    where: { clientId },
+    include: {
+      teamMember: {
+        include: {
+          user: { select: { name: true, email: true } },
+        },
+      },
+    },
+    orderBy: { assignedAt: 'desc' },
+  })
+  return rows.map((a) => ({
+    id: a.id,
+    teamMemberId: a.teamMember.id,
+    name: a.teamMember.user.name,
+    email: a.teamMember.user.email,
+  }))
+}
+
+export async function listUnassignedTeamMembers(clientId: string): Promise<{ id: string; name: string; email: string }[]> {
+  await requireRole('SUPER_ADMIN')
+  const rows = await prisma.teamMember.findMany({
+    where: {
+      deletedAt: null,
+      assignments: { none: { clientId } },
+    },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { name: true, email: true } },
+    },
+  })
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.user.name,
+    email: r.user.email,
+  }))
+}
+
+export async function listUnassignedClients(teamMemberId: string): Promise<{ id: string; companyName: string; uniqueSlug: string }[]> {
+  await requireRole('SUPER_ADMIN')
+  return prisma.client.findMany({
+    where: { deletedAt: null, assignments: { none: { teamMemberId } } },
+    orderBy: { companyName: 'asc' },
+    select: { id: true, companyName: true, uniqueSlug: true },
   })
 }
 

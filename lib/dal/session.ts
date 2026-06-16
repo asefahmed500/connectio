@@ -16,7 +16,10 @@
 import 'server-only'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
-import { unauthorized, forbidden } from 'next/navigation'
+import { redirect, notFound } from 'next/navigation'
+// NOTE: forbidden() requires experimental.authInterrupts in next.config.
+// Until that's enabled, use notFound() as a secure fallback (hides resource existence).
+const forbidden = notFound
 import { verifyAccessToken, type AccessClaims } from '@/lib/auth/tokens'
 import { prisma } from '@/lib/db'
 import type { UserRole } from '@prisma/client'
@@ -73,24 +76,24 @@ export const getCurrentUser = cache(async () => {
 })
 
 /**
- * Throws `unauthorized()` (renders app/unauthorized.tsx) if not authenticated.
+ * Redirects to /login if not authenticated.
  * Returns the current user otherwise.
  */
 export async function requireSession() {
   const user = await getCurrentUser()
-  if (!user) unauthorized()
+  if (!user) redirect('/login')
   return user as NonNullable<typeof user>
 }
 
 /**
- * Throws `unauthorized()` / `forbidden()` based on auth state and role.
- * Returns the current user if their role is in `roles`.
+ * Returns 404 if the user's role is not in `roles`.
+ * Returns the current user if it is.
  */
 export async function requireRole<T extends UserRole>(
   ...roles: readonly T[]
 ) {
   const user = await requireSession()
-  if (!roles.includes(user.role as T)) forbidden()
+  if (!roles.includes(user.role as T)) notFound()
   return user
 }
 

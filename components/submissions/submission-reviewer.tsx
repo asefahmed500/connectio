@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
 import { updateSubmissionStatusAction } from './actions'
 import type { SubmissionStatus } from '@prisma/client'
 
@@ -40,7 +41,9 @@ export function SubmissionReviewer({
   const allowed = ALLOWED[status]
 
   return (
-    <div className="space-y-2 pt-2 border-t">
+    <>
+      <Separator />
+      <div className="flex flex-col gap-2 pt-2">
       <div className="flex flex-wrap gap-2">
         {ALL.filter((b) => allowed.includes(b.status)).map((b) => (
           <Button
@@ -74,5 +77,6 @@ export function SubmissionReviewer({
       </div>
       {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
     </div>
+    </>
   )
 }

@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import type { FileDTO } from '@/lib/dal/files'
 import { deleteFileAction } from './actions'
 
@@ -17,7 +18,9 @@ export function FileRow({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   return (
-    <li className="border rounded-lg p-3 flex justify-between items-center gap-3">
+    <li>
+      <Card>
+        <CardContent className="p-3 flex justify-between items-center gap-3">
       <div className="min-w-0">
         <a
           href={`/api/uploads/${file.id}`}
@@ -48,6 +51,8 @@ export function FileRow({
         </Button>
         {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       </form>
+        </CardContent>
+      </Card>
     </li>
   )
 }

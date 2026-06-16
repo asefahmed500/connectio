@@ -14,8 +14,8 @@ async function main() {
     throw new Error('Refusing to seed in production.')
   }
 
-  const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@localhost'
-  const password = process.env.SEED_ADMIN_PASSWORD ?? 'admin-password-123'
+  const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@clientconnect.com'
+  const password = process.env.SEED_ADMIN_PASSWORD ?? 'Admin123!'
   const name = process.env.SEED_ADMIN_NAME ?? 'Super Admin'
 
   const prisma = new PrismaClient()

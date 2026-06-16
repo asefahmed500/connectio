@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { NotificationsBell } from '@/components/notifications/notifications-bell'
 import { logoutAction } from '@/app/(auth)/logout/actions'
+import { LogOut } from 'lucide-react'
 
 function nav(slug: string) {
   return [
@@ -40,11 +41,11 @@ export function ClientShell({
   const pathname = usePathname()
 
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={false}>
       <Sidebar>
         <SidebarHeader>
           <div className="px-2 py-1">
-            <div className="font-semibold leading-tight">ClientConnect</div>
+            <div className="font-heading text-xl leading-none tracking-wide">CLIENTCONNECT</div>
             <div className="text-xs text-muted-foreground">Client portal</div>
           </div>
         </SidebarHeader>
@@ -64,27 +65,30 @@ export function ClientShell({
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter>
-          <div className="flex items-center justify-between px-2">
-            <span className="text-xs text-muted-foreground truncate flex-1">
+          <div className="flex flex-col gap-2 px-2">
+            <span className="text-xs text-muted-foreground truncate">
               {user.email}
             </span>
-            <NotificationsBell enabled />
+            <form action={logoutAction}>
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="w-full"
+              >
+                <LogOut data-icon="inline-start" />
+                Sign out
+              </Button>
+            </form>
           </div>
-          <form action={logoutAction}>
-            <Button
-              type="submit"
-              variant="outline"
-              size="sm"
-              className="w-full"
-            >
-              Sign out
-            </Button>
-          </form>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger />
+        <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+          <div className="flex items-center gap-2">
+            <SidebarTrigger />
+          </div>
+          <NotificationsBell enabled />
         </header>
         <main className="flex-1 p-8 overflow-x-auto">{children}</main>
       </SidebarInset>

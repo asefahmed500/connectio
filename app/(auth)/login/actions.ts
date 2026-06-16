@@ -32,7 +32,13 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     password: formData.get('password'),
     next: formData.get('next'),
   })
-  if (!parsed.success) return { error: 'Please enter a valid email and password.' }
+  if (!parsed.success) {
+    const issues = parsed.error.issues
+    if (issues.some((i) => i.path.includes('email'))) {
+      return { error: 'Please enter a valid email address.' }
+    }
+    return { error: 'Please enter your password.' }
+  }
 
   const { email, password, next } = parsed.data
   const ip = await readIp()

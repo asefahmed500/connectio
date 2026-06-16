@@ -38,7 +38,7 @@ const DEFAULT_SCHEMA = {
 
 export default function NewFormPage() {
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="flex flex-col gap-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">New form</h1>
         <p className="text-sm text-muted-foreground">

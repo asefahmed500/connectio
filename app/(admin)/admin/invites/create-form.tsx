@@ -7,6 +7,7 @@ import { useActionState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field, FieldLabel, FieldError } from '@/components/ui/field'
+import { Card, CardContent } from '@/components/ui/card'
 import { createInviteAction } from './actions'
 
 const schema = z.object({
@@ -26,7 +27,9 @@ export function CreateInviteForm() {
   })
 
   return (
-    <form action={action} noValidate className="border rounded-lg p-4 flex flex-col gap-3">
+    <form action={action} noValidate>
+      <Card>
+        <CardContent className="p-4 flex flex-col gap-3">
       <div className="grid grid-cols-3 gap-3">
         <Field data-invalid={!!errors.email}>
           <FieldLabel htmlFor="email">Client email</FieldLabel>
@@ -47,7 +50,7 @@ export function CreateInviteForm() {
       {state && 'error' in state && <p className="text-sm text-destructive" role="alert">{state.error}</p>}
       {state && 'success' in state && (
         <div className="text-sm flex flex-col gap-1 bg-muted/50 rounded p-3">
-          <div className="font-medium text-emerald-700 dark:text-emerald-400">Invite created</div>
+          <div className="font-medium text-emerald-700">Invite created</div>
           <div>
             Share this link with the client:{' '}
             <code className="font-mono text-xs break-all">{state.inviteLink}</code>
@@ -57,6 +60,8 @@ export function CreateInviteForm() {
       <Button type="submit" disabled={pending}>
         {pending ? 'Creating…' : 'Create invite'}
       </Button>
+        </CardContent>
+      </Card>
     </form>
   )
 }

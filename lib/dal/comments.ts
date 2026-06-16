@@ -54,7 +54,7 @@ function toNode(r: Row, replies: CommentNode[]): CommentNode {
  */
 export const getCommentsDTO = cache(
   async (opts: { clientId: string; submissionId?: string }): Promise<CommentNode[]> => {
-    const claims = await requireClientAccess(opts.clientId)
+    const user = await requireClientAccess(opts.clientId)
 
     const rows = await prisma.comment.findMany({
       where: {
@@ -62,7 +62,7 @@ export const getCommentsDTO = cache(
         submissionId: opts.submissionId ?? null,
         deletedAt: null,
         // Clients never see internal comments.
-        ...(claims.role === 'CLIENT' ? { isInternal: false } : {}),
+        ...(user!.role === 'CLIENT' ? { isInternal: false } : {}),
       },
       include: { author: { select: { id: true, name: true, role: true } } },
       orderBy: { createdAt: 'asc' },
@@ -82,6 +82,17 @@ export const getCommentsDTO = cache(
       .map((r) => toNode(r, repliesByParent.get(r.id) ?? []))
   },
 )
+
+export async function countComments(clientId: string, isInternal?: boolean): Promise<number> {
+  await requireClientAccess(clientId)
+  return prisma.comment.count({
+    where: {
+      clientId,
+      deletedAt: null,
+      ...(isInternal !== undefined ? { isInternal } : {}),
+    },
+  })
+}
 
 export async function postComment(opts: {
   clientId: string

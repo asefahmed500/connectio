@@ -7,11 +7,11 @@
 // Run with: npx tsx scripts/seed-test-data.ts
 //
 // Passwords are deterministic so we can log in via next-browser:
-//   admin@localhost      / Admin-password-123    (already created by prisma/seed.ts)
-//   team@localhost       / Team-password-123
-//   alice@acme.test      / Client-password-123
-//   bob@globex.test      / Client-password-123
-//   carol@initech.test   / Client-password-123
+//   admin@clientconnect.com / Admin123!    (already created by prisma/seed.ts)
+//   team@clientconnect.com  / Team123!
+//   alice@acme.com          / Client123!
+//   bob@globex.com          / Client123!
+//   carol@initech.com       / Client123!
 
 import { PrismaClient, UserRole, SubmissionStatus, InviteStatus } from '@prisma/client'
 import { hash } from '@node-rs/argon2'
@@ -19,9 +19,9 @@ import { hash } from '@node-rs/argon2'
 const ARGON2ID = 2
 
 const TEST_PASSWORDS = {
-  admin: 'Admin-password-123',
-  team: 'Team-password-123',
-  client: 'Client-password-123',
+  admin: 'Admin123!',
+  team: 'Team123!',
+  client: 'Client123!',
 }
 
 const argon = (pw: string) =>
@@ -66,9 +66,9 @@ async function main() {
   }
 
   // ── Users ──────────────────────────────────────────────────────
-  const admin = await upsertUser('admin@localhost', 'Super Admin', UserRole.SUPER_ADMIN, TEST_PASSWORDS.admin)
-  const team = await upsertUser('team@localhost', 'Team Member', UserRole.TEAM_MEMBER, TEST_PASSWORDS.team)
-  const team2 = await upsertUser('team2@localhost', 'Team Member 2', UserRole.TEAM_MEMBER, TEST_PASSWORDS.team)
+  const admin = await upsertUser('admin@clientconnect.com', 'Super Admin', UserRole.SUPER_ADMIN, TEST_PASSWORDS.admin)
+  const team = await upsertUser('team@clientconnect.com', 'Team Member', UserRole.TEAM_MEMBER, TEST_PASSWORDS.team)
+  const team2 = await upsertUser('team2@clientconnect.com', 'Team Member 2', UserRole.TEAM_MEMBER, TEST_PASSWORDS.team)
 
   // ── TeamMember profiles ────────────────────────────────────────
   const teamProfile =
@@ -80,9 +80,9 @@ async function main() {
 
   // ── Invites + Clients ──────────────────────────────────────────
   const clientSpecs = [
-    { slug: 'acme', email: 'alice@acme.test', company: 'Acme Corp', contact: 'Alice Adams' },
-    { slug: 'globex', email: 'bob@globex.test', company: 'Globex Inc', contact: 'Bob Brown' },
-    { slug: 'initech', email: 'carol@initech.test', company: 'Initech LLC', contact: 'Carol Chen' },
+    { slug: 'acme', email: 'alice@acme.com', company: 'Acme Corp', contact: 'Alice Adams' },
+    { slug: 'globex', email: 'bob@globex.com', company: 'Globex Inc', contact: 'Bob Brown' },
+    { slug: 'initech', email: 'carol@initech.com', company: 'Initech LLC', contact: 'Carol Chen' },
   ]
 
   const clients: Array<{ id: string; uniqueSlug: string; companyName: string; contactName: string; userId: string }> = []
@@ -125,13 +125,19 @@ async function main() {
       title: 'Client Onboarding',
       description: 'Initial intake form for new clients.',
       formSchema: {
+        version: 1,
         fields: [
-          { id: 'company_name', type: 'text', label: 'Company name', required: true },
-          { id: 'contact_email', type: 'email', label: 'Primary contact email', required: true },
-          { id: 'website', type: 'url', label: 'Website', required: false },
-          { id: 'description', type: 'textarea', label: 'Describe your business', required: true },
-          { id: 'employees', type: 'number', label: 'Number of employees', required: false },
-          { id: 'industry', type: 'select', label: 'Industry', options: ['Tech', 'Finance', 'Healthcare', 'Other'] },
+          { name: 'company_name', label: 'Company name', type: 'text', required: true },
+          { name: 'contact_email', label: 'Primary contact email', type: 'email', required: true },
+          { name: 'website', label: 'Website', type: 'url', required: false },
+          { name: 'description', label: 'Describe your business', type: 'textarea', required: true },
+          { name: 'employees', label: 'Number of employees', type: 'number', required: false },
+          { name: 'industry', label: 'Industry', type: 'select', required: true, options: [
+            { label: 'Tech', value: 'tech' },
+            { label: 'Finance', value: 'finance' },
+            { label: 'Healthcare', value: 'healthcare' },
+            { label: 'Other', value: 'other' },
+          ]},
         ],
       },
     },
@@ -139,11 +145,12 @@ async function main() {
       title: 'Project Brief',
       description: 'Define the scope of work.',
       formSchema: {
+        version: 1,
         fields: [
-          { id: 'title', type: 'text', label: 'Project title', required: true },
-          { id: 'goals', type: 'textarea', label: 'Project goals', required: true },
-          { id: 'deadline', type: 'date', label: 'Target deadline' },
-          { id: 'budget', type: 'text', label: 'Budget range' },
+          { name: 'title', label: 'Project title', type: 'text', required: true },
+          { name: 'goals', label: 'Project goals', type: 'textarea', required: true },
+          { name: 'deadline', label: 'Target deadline', type: 'text' },
+          { name: 'budget', label: 'Budget range', type: 'text' },
         ],
       },
     },
@@ -151,9 +158,16 @@ async function main() {
       title: 'Feedback Survey',
       description: 'Tell us how it went.',
       formSchema: {
+        version: 1,
         fields: [
-          { id: 'rating', type: 'select', label: 'Overall rating', options: ['1', '2', '3', '4', '5'] },
-          { id: 'comments', type: 'textarea', label: 'Comments' },
+          { name: 'rating', label: 'Overall rating', type: 'select', required: true, options: [
+            { label: '1', value: '1' },
+            { label: '2', value: '2' },
+            { label: '3', value: '3' },
+            { label: '4', value: '4' },
+            { label: '5', value: '5' },
+          ]},
+          { name: 'comments', label: 'Comments', type: 'textarea' },
         ],
       },
     },
@@ -180,8 +194,8 @@ async function main() {
     status: SubmissionStatus
     data: Record<string, unknown>
   }> = [
-    { clientSlug: 'acme', formKey: 'onboarding', status: SubmissionStatus.SUBMITTED, data: { company_name: 'Acme Corp', contact_email: 'alice@acme.test', description: 'Sells anvils.', employees: 12 } },
-    { clientSlug: 'globex', formKey: 'onboarding', status: SubmissionStatus.IN_REVIEW, data: { company_name: 'Globex Inc', contact_email: 'bob@globex.test', description: 'World domination.' } },
+    { clientSlug: 'acme', formKey: 'onboarding', status: SubmissionStatus.SUBMITTED, data: { company_name: 'Acme Corp', contact_email: 'alice@acme.com', description: 'Sells anvils.', employees: 12 } },
+    { clientSlug: 'globex', formKey: 'onboarding', status: SubmissionStatus.IN_REVIEW, data: { company_name: 'Globex Inc', contact_email: 'bob@globex.com', description: 'World domination.' } },
     { clientSlug: 'acme', formKey: 'project_brief', status: SubmissionStatus.DRAFT, data: { title: 'Acme website redesign', goals: 'Modernize the marketing site.' } },
     { clientSlug: 'globex', formKey: 'project_brief', status: SubmissionStatus.APPROVED, data: { title: 'Globex mobile app', goals: 'Launch MVP.', budget: '$60k' } },
     { clientSlug: 'initech', formKey: 'feedback', status: SubmissionStatus.CHANGES_REQUESTED, data: { rating: '3', comments: 'Decent.' } },
@@ -302,11 +316,11 @@ async function main() {
     },
   }, null, 2))
   console.log('\nLogin credentials:')
-  console.log(`  admin@localhost   / ${TEST_PASSWORDS.admin}`)
-  console.log(`  team@localhost    / ${TEST_PASSWORDS.team}`)
-  console.log(`  alice@acme.test   / ${TEST_PASSWORDS.client}`)
-  console.log(`  bob@globex.test   / ${TEST_PASSWORDS.client}`)
-  console.log(`  carol@initech.test/ ${TEST_PASSWORDS.client}`)
+  console.log(`  admin@clientconnect.com / ${TEST_PASSWORDS.admin}`)
+  console.log(`  team@clientconnect.com  / ${TEST_PASSWORDS.team}`)
+  console.log(`  alice@acme.com          / ${TEST_PASSWORDS.client}`)
+  console.log(`  bob@globex.com          / ${TEST_PASSWORDS.client}`)
+  console.log(`  carol@initech.com       / ${TEST_PASSWORDS.client}`)
 }
 
 main()

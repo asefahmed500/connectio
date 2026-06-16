@@ -27,7 +27,7 @@ export function FieldRenderer({ field, value, onChange, disabled }: FieldRendere
   const id = `field-${field.name}`
 
   return (
-    <div className="space-y-1.5">
+    <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>
         {field.label}
         {field.required && <span className="text-destructive ml-1">*</span>}
@@ -134,7 +134,7 @@ function renderField(
     case 'checkbox': {
       const selected = (value as string[] | undefined) ?? []
       return (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {(field.options ?? []).map((o) => {
             const checked = selected.includes(o.value)
             return (

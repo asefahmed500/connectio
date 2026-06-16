@@ -85,10 +85,19 @@ export function matchesMagic(mime: string, leading: Uint8Array): boolean {
   return true
 }
 
+/**
+ * Extracts the (lowercased, dot-stripped) file extension from a filename, or
+ * '' if it has none. Shared by the upload route (extension allow-list check)
+ * and guessExtension so the two never disagree on what counts as "the ext".
+ */
+export function extensionOf(filename: string): string {
+  return filename.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] ?? ''
+}
+
 export function guessExtension(mime: string, originalName: string): string {
-  const fromName = originalName.toLowerCase().match(/\.([a-z0-9]+)$/)
-  if (fromName && isAllowedExtension(fromName[1])) {
-    return '.' + fromName[1]
+  const ext = extensionOf(originalName)
+  if (ext && isAllowedExtension(ext)) {
+    return '.' + ext
   }
   const def = ALLOWED.find((t) => t.mime === mime)
   if (def) return '.' + def.exts[0]
