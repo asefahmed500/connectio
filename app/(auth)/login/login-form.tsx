@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useCallback, startTransition } from 'react'
+import { useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -40,17 +40,11 @@ export function LoginForm() {
     defaultValues: { email: '', password: '' },
   })
 
-  const onSubmit = useCallback((e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    fd.set('next', next)
-    startTransition(() => action(fd))
-  }, [action, next])
-
   return (
     <Card className="shadow-sm">
       <CardContent className="p-6 flex flex-col gap-5">
-      <form ref={formRef} onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+      <form ref={formRef} action={action} noValidate className="flex flex-col gap-4">
+        <input type="hidden" name="next" value={next} />
         <Field data-invalid={!!errors.email}>
           <FieldLabel htmlFor="email">Email</FieldLabel>
           <Input
