@@ -30,65 +30,75 @@ export async function createInviteAction(
   })
   if (!parsed.success) return { error: 'Please fill all fields correctly.' }
 
-  const slug = await proposeSlug(parsed.data)
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-
-  const invite = await prisma.invite.create({
-    data: {
-      email: parsed.data.email.toLowerCase(),
-      companyName: parsed.data.companyName,
-      contactName: parsed.data.contactName,
-      slug,
-      createdBy: user.id,
-      expiresAt,
-    },
-  })
-
-  await writeAudit({
-    action: 'INVITE_CREATED',
-    userId: user.id,
-    resource: 'Invite',
-    resourceId: invite.id,
-  })
-
-  revalidatePath('/admin/invites')
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? ''
-  const inviteLink = `${base}/invite/${invite.slug}`
-
-  // Send invite email
   try {
-    const { sendEmail } = await import('@/lib/email')
-    const { renderInviteEmail } = await import('@/lib/email-templates')
-    const tpl = renderInviteEmail({
-      contactName: parsed.data.contactName,
-      companyName: parsed.data.companyName,
-      inviteUrl: inviteLink,
-    })
-    await sendEmail({ to: parsed.data.email, subject: tpl.subject, text: tpl.text, html: tpl.html })
-  } catch (err) {
-    console.error('[invites] Failed to send invite email:', err)
-  }
+    const slug = await proposeSlug(parsed.data)
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
 
-  return { success: true, slug: invite.slug, inviteLink }
+    const invite = await prisma.invite.create({
+      data: {
+        email: parsed.data.email.toLowerCase(),
+        companyName: parsed.data.companyName,
+        contactName: parsed.data.contactName,
+        slug,
+        createdBy: user.id,
+        expiresAt,
+      },
+    })
+
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: 'INVITE_CREATED',
+      userId: user.id,
+      resource: 'Invite',
+      resourceId: invite.id,
+    })
+
+    revalidatePath('/admin/invites')
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? ''
+    const inviteLink = `${base}/invite/${invite.slug}`
+
+    try {
+      const { sendEmail } = await import('@/lib/email')
+      const { renderInviteEmail } = await import('@/lib/email-templates')
+      const tpl = renderInviteEmail({
+        contactName: parsed.data.contactName,
+        companyName: parsed.data.companyName,
+        inviteUrl: inviteLink,
+      })
+      await sendEmail({ to: parsed.data.email, subject: tpl.subject, text: tpl.text, html: tpl.html })
+    } catch (err) {
+      console.error('[invites] Failed to send invite email:', err)
+    }
+
+    return { success: true, slug: invite.slug, inviteLink }
+  } catch (err) {
+    console.error('[invites] createInvite failed:', err)
+    return { error: 'Failed to create invite. Please try again.' }
+  }
 }
 
 export async function revokeInviteAction(slug: string): Promise<void> {
   const user = await requireRole('SUPER_ADMIN')
-  const invite = await prisma.invite.findUnique({ where: { slug } })
-  if (!invite) return
-  if (invite.status !== 'OPEN') return
+  try {
+    const invite = await prisma.invite.findUnique({ where: { slug } })
+    if (!invite) return
+    if (invite.status !== 'OPEN') return
 
-  await prisma.invite.update({
-    where: { id: invite.id },
-    data: { status: 'REVOKED' },
-  })
+    await prisma.invite.update({
+      where: { id: invite.id },
+      data: { status: 'REVOKED' },
+    })
 
-  await writeAudit({
-    action: 'INVITE_REVOKED',
-    userId: user.id,
-    resource: 'Invite',
-    resourceId: invite.id,
-  })
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: 'INVITE_REVOKED',
+      userId: user.id,
+      resource: 'Invite',
+      resourceId: invite.id,
+    })
 
-  revalidatePath('/admin/invites')
+    revalidatePath('/admin/invites')
+  } catch (err) {
+    console.error('[invites] revokeInvite failed:', err)
+  }
 }

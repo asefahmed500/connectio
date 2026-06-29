@@ -47,15 +47,19 @@ export async function updateUserAction(
 }
 
 export async function toggleBlockAction(userId: string) {
-  await requireRole('SUPER_ADMIN')
-  await toggleBlockUser(userId)
-  revalidatePath(`/admin/users/${userId}`)
-  revalidatePath('/admin/users')
+  try {
+    await requireRole('SUPER_ADMIN')
+    await toggleBlockUser(userId)
+    revalidatePath(`/admin/users/${userId}`)
+    revalidatePath('/admin/users')
+  } catch (err) {
+    console.error('[users] toggleBlock failed:', err)
+  }
 }
 
 export async function adminResetPasswordAction(userId: string): Promise<UserActionState> {
+  await requireRole('SUPER_ADMIN')
   try {
-    await requireRole('SUPER_ADMIN')
     const result = await adminResetPassword(userId)
 
     const { prisma } = await import('@/lib/db')
@@ -73,6 +77,7 @@ export async function adminResetPasswordAction(userId: string): Promise<UserActi
     }
 
     revalidatePath(`/admin/users/${userId}`)
+    revalidatePath('/admin/users')
     return { success: true, password: result.password }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Reset failed' }
@@ -80,7 +85,12 @@ export async function adminResetPasswordAction(userId: string): Promise<UserActi
 }
 
 export async function deleteUserAction(userId: string) {
-  await requireRole('SUPER_ADMIN')
-  await deleteUser(userId)
-  revalidatePath('/admin/users')
+  try {
+    await requireRole('SUPER_ADMIN')
+    await deleteUser(userId)
+    revalidatePath('/admin/users')
+    revalidatePath(`/admin/users/${userId}`)
+  } catch (err) {
+    console.error('[users] deleteUser failed:', err)
+  }
 }

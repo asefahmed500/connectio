@@ -107,24 +107,30 @@ export async function POST(req: Request) {
   }
 
   if (stored.size !== BigInt(file.size)) {
-    // Size mismatch — clean up and bail.
     await storage.delete(storageKey)
     return NextResponse.json({ error: 'Size mismatch after write' }, { status: 500 })
   }
 
-  const created = await prisma.file.create({
-    data: {
-      id: fileId,
-      clientId,
-      submissionId,
-      storageKey,
-      originalName: sanitizeFilename(file.name),
-      mimeType: file.type,
-      size: stored.size,
-      checksum: stored.sha256,
-      uploadedById: user.id,
-    },
-  })
+  let created
+  try {
+    created = await prisma.file.create({
+      data: {
+        id: fileId,
+        clientId,
+        submissionId,
+        storageKey,
+        originalName: sanitizeFilename(file.name),
+        mimeType: file.type,
+        size: stored.size,
+        checksum: stored.sha256,
+        uploadedById: user.id,
+      },
+    })
+  } catch (err) {
+    console.error('[uploads] prisma.file.create failed:', err)
+    await storage.delete(storageKey).catch(() => {})
+    return NextResponse.json({ error: 'Failed to save file record' }, { status: 500 })
+  }
 
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
@@ -132,17 +138,15 @@ export async function POST(req: Request) {
     userId: user.id,
     resource: 'File',
     resourceId: created.id,
-  })
+  }).catch((err: unknown) => console.error('[uploads] audit failed:', err))
 
-  // Notify the appropriate party. Client uploads → admins + assigned team.
-  // Team/admin uploads → client. (Future: distinguish by author role.)
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'FILE_UPLOADED_CLIENT',
     actorId: user.id,
     clientId,
     fileName: created.originalName,
-  })
+  }).catch((err: unknown) => console.error('[uploads] notify failed:', err))
 
   return NextResponse.json(
     {

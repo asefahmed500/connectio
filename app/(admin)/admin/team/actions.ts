@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import { requireRole } from '@/lib/dal/session'
 import { createTeamMember } from '@/lib/dal/team'
 import { prisma } from '@/lib/db'
 
@@ -27,6 +28,8 @@ export async function addTeamMemberAction(
   _prev: AddTeamMemberState,
   formData: FormData,
 ): Promise<AddTeamMemberState> {
+  await requireRole('SUPER_ADMIN')
+
   const parsed = Schema.safeParse({
     name: formData.get('name'),
     email: formData.get('email'),
@@ -37,12 +40,12 @@ export async function addTeamMemberAction(
     return { fields: parsed.error.flatten().fieldErrors as Record<string, string[]> }
   }
 
-  const existing = await prisma.user.findUnique({
-    where: { email: parsed.data.email.toLowerCase() },
-  })
-  if (existing) return { error: 'An account with this email already exists.' }
-
   try {
+    const existing = await prisma.user.findUnique({
+      where: { email: parsed.data.email.toLowerCase() },
+    })
+    if (existing) return { error: 'An account with this email already exists.' }
+
     await createTeamMember(parsed.data)
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Failed to create team member' }

@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import { requireRole } from '@/lib/dal/session'
 import { assignTeamToClient, unassignTeamFromClient } from '@/lib/dal/team'
 
 const AssignSchema = z.object({
@@ -10,28 +11,22 @@ const AssignSchema = z.object({
 })
 
 export async function assignTeamMemberAction(formData: FormData) {
+  await requireRole('SUPER_ADMIN')
   const parsed = AssignSchema.safeParse({
     clientId: formData.get('clientId'),
     teamMemberId: formData.get('teamMemberId'),
   })
   if (!parsed.success) throw new Error('Invalid input')
 
-  await assignTeamToClient({
-    clientId: parsed.data.clientId,
-    teamMemberId: parsed.data.teamMemberId,
-  })
-
+  await assignTeamToClient(parsed.data)
   revalidatePath(`/admin/clients/${parsed.data.clientId}`)
 }
 
 export async function unassignTeamMemberAction(teamMemberId: string, clientId: string) {
+  await requireRole('SUPER_ADMIN')
   const parsed = AssignSchema.safeParse({ clientId, teamMemberId })
   if (!parsed.success) throw new Error('Invalid input')
 
-  await unassignTeamFromClient({
-    clientId: parsed.data.clientId,
-    teamMemberId: parsed.data.teamMemberId,
-  })
-
+  await unassignTeamFromClient(parsed.data)
   revalidatePath(`/admin/clients/${parsed.data.clientId}`)
 }
