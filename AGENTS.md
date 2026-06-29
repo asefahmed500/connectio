@@ -69,7 +69,7 @@ Refresh: `POST /api/auth/refresh` — CSRF-protected (Origin check), rate-limite
 ## Route Groups & Layout
 
 - Route groups: `(admin)`, `(team)`, `(client)`, `(auth)`. Layouts enforce via `requireRole()`.
-- Sidebar starts **collapsed** (`defaultOpen={false}`). Toggle via hamburger in header.
+- Sidebar opens expanded with `collapsible="icon"` — collapses to 3rem icon strip, shows tooltips. Toggle via hamburger.
 - Notification bell in **header top-right** for all 3 roles via `NotificationsBell` component.
 - `/invite/[slug]` is intentionally public — no proxy protection.
 
@@ -141,7 +141,12 @@ Transport: SSE at `/api/notifications/stream` (`GET`). Polls DB every 8s. Falls 
 - **Notification list API** returns `{ items, unread }` shape — always format, even with search/filter.
 - **`.env.example`** is the authoritative env var catalog. `DATABASE_URL`, `AUTH_JWT_SECRET` required.
 - **Login action** uses `select` (not `include`) — add new fields to both the Prisma query and the type annotation.
+- **`requireRole`/`requireSession` throw Next.js redirect/notFound errors** — never wrap them in try/catch blocks. They must propagate to the framework.
+- **API routes need explicit `getCurrentUser()` guard** — many DAL functions silently return empty/null for unauthenticated users rather than throwing.
+- **Server action files** at `app/(admin)/admin/clients/[id]/actions.ts` and `app/(admin)/admin/team/[id]/actions.ts` are easy to forget when building those pages — they need `requireRole('SUPER_ADMIN')` or anyone can assign/unassign.
+- **Uploads POST:** DB row creation must be in try/catch with `storage.delete(storageKey)` on failure — file is already stored.
+- **Uploads responses:** never leak `storageKey` (internal paths) or raw `err.message` to the client. Use generic error text.
+- **Comments SSE stream** must re-auth poll every cycle (see `notifications/stream` for the pattern) — blocks/rejects must close the stream.
 - **`saveDraft` in DAL accepts `{ clientId, formId, formData }`** — no `submissionId`. The server action wrapper mirrors this.
-- **Server action files** at `app/(admin)/admin/clients/[id]/actions.ts` and `app/(admin)/admin/team/[id]/actions.ts` are easy to forget when building those pages.
 - **Migration naming:** use `snake_case` (`add_user_is_active` not `addUserIsActive`).
 - **Scripts** in `scripts/`: `seed-test-data.ts`, `reset-admin.ts`, `ensure-e2e-admin.ts`, `smoke-auth.ts`, `count.ts`.
