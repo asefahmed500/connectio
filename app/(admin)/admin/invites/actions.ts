@@ -53,7 +53,23 @@ export async function createInviteAction(
 
   revalidatePath('/admin/invites')
   const base = process.env.NEXT_PUBLIC_APP_URL ?? ''
-  return { success: true, slug: invite.slug, inviteLink: `${base}/invite/${invite.slug}` }
+  const inviteLink = `${base}/invite/${invite.slug}`
+
+  // Send invite email
+  try {
+    const { sendEmail } = await import('@/lib/email')
+    const { renderInviteEmail } = await import('@/lib/email-templates')
+    const tpl = renderInviteEmail({
+      contactName: parsed.data.contactName,
+      companyName: parsed.data.companyName,
+      inviteUrl: inviteLink,
+    })
+    await sendEmail({ to: parsed.data.email, subject: tpl.subject, text: tpl.text, html: tpl.html })
+  } catch (err) {
+    console.error('[invites] Failed to send invite email:', err)
+  }
+
+  return { success: true, slug: invite.slug, inviteLink }
 }
 
 export async function revokeInviteAction(slug: string): Promise<void> {

@@ -5,7 +5,7 @@ import { listSubmissionsWithSchema } from '@/lib/dal/submissions'
 import { listAssignedTeamMembers, listUnassignedTeamMembers } from '@/lib/dal/team'
 import { SubmissionReviewer } from '@/components/submissions/submission-reviewer'
 import { parseFormSchema } from '@/lib/forms/schema'
-import { CommentThread } from '@/components/comments/comment-thread'
+import { LiveChat } from '@/components/comments/live-chat'
 import { AssignTeamForm } from './assign-team-form'
 import { UnassignTeamButton } from './unassign-button'
 import {
@@ -165,7 +165,7 @@ export default async function AdminClientDetailPage({
         <h2 className="text-lg font-heading tracking-wide mb-3">Messages</h2>
         <Card>
           <CardContent className="p-4">
-            <CommentThread clientId={id} />
+            <LiveChat clientId={id} />
           </CardContent>
         </Card>
       </div>

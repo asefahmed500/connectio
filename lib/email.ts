@@ -3,29 +3,60 @@ import { createTransport, type Transporter } from 'nodemailer'
 
 let transporter: Transporter | null = null
 
+export type EmailProvider = 'smtp' | 'gmail-oauth2' | 'gmail-app-password'
+
 function getTransporter(): Transporter | null {
   if (transporter) return transporter
+
+  // Priority: Gmail OAuth2 > Gmail App Password > Generic SMTP
+  if (
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.GOOGLE_REFRESH_TOKEN
+  ) {
+    transporter = createTransport({
+      service: 'gmail',
+      auth: {
+        type: 'OAuth2',
+        user: process.env.GMAIL_USER,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      },
+    })
+    return transporter
+  }
+
+  if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+    transporter = createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.GMAIL_USER,
+        pass: process.env.GMAIL_APP_PASSWORD,
+      },
+    })
+    return transporter
+  }
 
   const host = process.env.SMTP_HOST
   const port = process.env.SMTP_PORT ? Number(process.env.SMTP_PORT) : 587
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
 
-  if (!host || !user || !pass) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('[email] SMTP not configured — emails will not be sent')
-    }
-    return null
+  if (host && user && pass) {
+    transporter = createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    })
+    return transporter
   }
 
-  transporter = createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-  })
-
-  return transporter
+  if (process.env.NODE_ENV === 'production') {
+    console.error('[email] No email provider configured — emails will not be sent')
+  }
+  return null
 }
 
 export type SendEmailParams = {

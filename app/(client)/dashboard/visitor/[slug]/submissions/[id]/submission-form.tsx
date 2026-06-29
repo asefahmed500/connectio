@@ -47,7 +47,6 @@ export function SubmissionForm({
 
   async function handleSaveDraft() {
     const result = await saveDraftAction({
-      submissionId,
       clientId,
       formId,
       formData: values,

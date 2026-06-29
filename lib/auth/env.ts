@@ -8,6 +8,16 @@ const schema = z.object({
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 
   // Cloudflare R2 (S3-compatible object storage)
+  // Gmail OAuth2
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_REFRESH_TOKEN: z.string().optional(),
+  GMAIL_USER: z.string().email().optional(),
+
+  // Gmail App Password
+  GMAIL_APP_PASSWORD: z.string().optional(),
+
+  // Cloudflare R2 (S3-compatible object storage)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),

@@ -85,5 +85,6 @@ export async function deleteCommentAction(commentId: string, clientId: string): 
 // both stay in sync after a post.
 function revalidateForClient(clientId: string) {
   revalidatePath(`/admin/clients/${clientId}`)
+  revalidatePath(`/team/clients/${clientId}`)
   revalidatePath(`/dashboard/visitor/`, 'page')
 }

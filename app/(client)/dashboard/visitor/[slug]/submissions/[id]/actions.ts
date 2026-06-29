@@ -1,32 +1,20 @@
 'use server'
 
-import { z } from 'zod'
+import 'server-only'
+
 import { redirect } from 'next/navigation'
-import { saveDraft, submit } from '@/lib/dal/submissions'
 import { prisma } from '@/lib/db'
+import { saveDraft, submit } from '@/lib/dal/submissions'
 import { parseFormSchema } from '@/lib/forms/schema'
 import { validateSubmission } from '@/lib/forms/validate'
 
-const SaveDraftSchema = z.object({
-  submissionId: z.string().cuid(),
-  clientId: z.string().cuid(),
-  formId: z.string().cuid(),
-  formData: z.record(z.string(), z.unknown()),
-})
-
-export type DraftResult = { success: true } | { success: false; error: string }
-
 export async function saveDraftAction(input: {
-  submissionId: string
   clientId: string
   formId: string
   formData: Record<string, unknown>
-}): Promise<DraftResult> {
-  const parsed = SaveDraftSchema.safeParse(input)
-  if (!parsed.success) return { success: false, error: 'Invalid input' }
-
+}): Promise<{ success: boolean; error?: string }> {
   try {
-    await saveDraft(parsed.data)
+    await saveDraft(input)
     return { success: true }
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : 'Save failed' }
@@ -35,44 +23,54 @@ export async function saveDraftAction(input: {
 
 export type SubmissionFormState =
   | undefined
-  | { error?: string }
+  | { error: string }
   | { fields?: Record<string, string[]> }
 
 export async function submitAction(
   _prev: SubmissionFormState,
   formData: FormData,
 ): Promise<SubmissionFormState> {
-  const submissionId = String(formData.get('submissionId'))
-  const clientId = String(formData.get('clientId'))
-  const formId = String(formData.get('formId'))
+  const submissionId = formData.get('submissionId') as string
+  const clientId = formData.get('clientId') as string
+  const formId = formData.get('formId') as string
+  const raw = formData.get('formData') as string
 
-  // Parse the JSON-encoded formData the client sent.
-  let parsedData: unknown
-  try {
-    parsedData = JSON.parse(String(formData.get('formData') ?? '{}'))
-  } catch {
-    return { error: 'Form data was malformed.' }
+  if (!submissionId || !clientId || !formId || !raw) {
+    return { error: 'Missing required fields' }
   }
 
-  // Load the form to get the schema, then validate server-side.
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    return { error: 'Invalid form data' }
+  }
+
   const form = await prisma.form.findFirstOrThrow({
     where: { id: formId, isActive: true, deletedAt: null },
   })
+
   const schema = parseFormSchema(form.formSchema as unknown)
-  const validated = validateSubmission(schema, parsedData)
-  if (!validated.success) {
-    return { fields: validated.error.flatten().fieldErrors as Record<string, string[]> }
+  const parsed = validateSubmission(schema, data)
+  if (!parsed.success) {
+    const fields: Record<string, string[]> = {}
+    for (const issue of parsed.error.issues) {
+      const key = String(issue.path[0] ?? '_form')
+      if (!fields[key]) fields[key] = []
+      fields[key].push(issue.message)
+    }
+    return { fields }
   }
 
   try {
-    await submit({
-      clientId,
-      formId,
-      formData: validated.data as Record<string, unknown>,
-    })
+    await submit({ clientId, formId, formData: data })
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Submit failed' }
   }
 
-  redirect(`../submissions/${submissionId}`)
+  const client = await prisma.client.findUniqueOrThrow({
+    where: { id: clientId },
+    select: { uniqueSlug: true },
+  })
+  redirect(`/dashboard/visitor/${client.uniqueSlug}/submissions/${submissionId}`)
 }

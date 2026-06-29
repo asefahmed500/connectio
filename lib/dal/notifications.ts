@@ -92,3 +92,78 @@ export async function markAllRead(): Promise<void> {
     }
   })
 }
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+  const user = await getCurrentUser()
+  if (!user) return
+
+  const n = await prisma.notification.findFirst({
+    where: { id: notificationId, recipientId: user.id },
+  })
+  if (!n) return
+
+  await prisma.$transaction(async (tx) => {
+    await tx.notification.delete({ where: { id: notificationId } })
+    if (!n.readAt) {
+      await tx.user.update({
+        where: { id: user.id },
+        data: { unreadNotifications: { decrement: 1 } },
+      })
+    }
+  })
+}
+
+export async function deleteAllNotifications(): Promise<void> {
+  const user = await getCurrentUser()
+  if (!user) return
+
+  await prisma.$transaction(async (tx) => {
+    await tx.notification.deleteMany({ where: { recipientId: user.id } })
+    await tx.user.update({
+      where: { id: user.id },
+      data: { unreadNotifications: 0 },
+    })
+  })
+}
+
+export async function searchNotifications(opts: {
+  query?: string
+  type?: string
+  read?: string
+  limit?: number
+} = {}): Promise<{ items: NotificationDTO[]; unread: number }> {
+  const user = await getCurrentUser()
+  if (!user) return { items: [], unread: 0 }
+
+  const where: Record<string, unknown> = { recipientId: user.id }
+
+  if (opts.query) {
+    where.OR = [
+      { title: { contains: opts.query, mode: 'insensitive' } },
+      { body: { contains: opts.query, mode: 'insensitive' } },
+    ]
+  }
+  if (opts.type) {
+    where.type = opts.type
+  }
+  if (opts.read === 'read') {
+    where.readAt = { not: null }
+  } else if (opts.read === 'unread') {
+    where.readAt = null
+  }
+
+  const prismaWhere = where as import('@prisma/client').Prisma.NotificationWhereInput
+
+  const [rows, unread] = await Promise.all([
+    prisma.notification.findMany({
+      where: prismaWhere,
+      orderBy: { createdAt: 'desc' },
+      take: opts.limit ?? 50,
+    }),
+    prisma.notification.count({
+      where: { recipientId: user.id, readAt: null },
+    }),
+  ])
+
+  return { items: rows.map(toDTO), unread }
+}

@@ -23,6 +23,7 @@ import { LogOut } from 'lucide-react'
 const NAV = [
   { href: '/team', label: 'Dashboard' },
   { href: '/team/clients', label: 'My clients' },
+  { href: '/team/notifications', label: 'Notifications' },
 ]
 
 export function TeamShell({

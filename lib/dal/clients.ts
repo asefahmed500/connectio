@@ -1,8 +1,9 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { requireRole, requireClientAccess, getCurrentUser } from '@/lib/dal/session'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
+import { proposeSlug } from '@/lib/dal/invites'
 
 export type ClientDTO = {
   id: string
@@ -95,3 +96,75 @@ export const getClientDTO = cache(async (clientId: string): Promise<ClientDTO | 
   if (!c) return null
   return toDTO(c)
 })
+
+function randomPick(arr: string): string {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function generatePassword(): string {
+  const special = '!@#$%^&*'
+  const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+  const lower = 'abcdefghijklmnopqrstuvwxyz'
+  const digits = '0123456789'
+  const all = upper + lower + digits + special
+  const required = [
+    randomPick(upper),
+    randomPick(lower),
+    randomPick(digits),
+    randomPick(special),
+  ]
+  const rest = Array.from({ length: 10 }, () => randomPick(all))
+  return [...required, ...rest].sort(() => Math.random() - 0.5).join('')
+}
+
+export async function createClientAccount(input: {
+  email: string
+  name: string
+  companyName: string
+  contactName: string
+}): Promise<{ userId: string; clientId: string; slug: string; password: string }> {
+  const admin = await requireRole('SUPER_ADMIN')
+  const password = generatePassword()
+  const { hashPassword } = await import('@/lib/auth/password')
+  const passwordHash = await hashPassword(password)
+
+  const slug = await proposeSlug({ contactName: input.contactName, companyName: input.companyName })
+
+  const result = await prisma.$transaction(async (tx) => {
+    const existingEmail = await tx.user.findUnique({ where: { email: input.email.toLowerCase() } })
+    if (existingEmail) throw new Error('A user with this email already exists')
+
+    const user = await tx.user.create({
+      data: {
+        email: input.email.toLowerCase(),
+        name: input.name,
+        passwordHash,
+        role: 'CLIENT',
+        client: {
+          create: {
+            companyName: input.companyName,
+            contactName: input.contactName,
+            uniqueSlug: slug,
+          },
+        },
+      },
+      include: { client: true },
+    })
+    return user
+  })
+
+  const { writeAudit } = await import('@/lib/audit')
+  await writeAudit({
+    action: 'CLIENT_ACCOUNT_CREATED',
+    userId: admin.id,
+    resource: 'User',
+    resourceId: result.id,
+  })
+
+  return {
+    userId: result.id,
+    clientId: result.client!.id,
+    slug,
+    password,
+  }
+}

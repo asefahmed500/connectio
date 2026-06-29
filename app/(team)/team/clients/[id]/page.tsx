@@ -5,7 +5,7 @@ import { getClientDTO } from '@/lib/dal/clients'
 import { listSubmissionsWithSchema } from '@/lib/dal/submissions'
 import { parseFormSchema } from '@/lib/forms/schema'
 import { SubmissionReviewer } from '@/components/submissions/submission-reviewer'
-import { CommentThread } from '@/components/comments/comment-thread'
+import { LiveChat } from '@/components/comments/live-chat'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
 export const metadata = { title: 'Client — ClientConnect' }
@@ -120,7 +120,7 @@ export default async function TeamClientDetailPage({
         <h2 className="text-lg font-heading tracking-wide mb-3">Messages</h2>
         <Card>
           <CardContent className="p-4">
-            <CommentThread clientId={id} />
+            <LiveChat clientId={id} />
           </CardContent>
         </Card>
       </div>

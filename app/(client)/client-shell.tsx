@@ -26,6 +26,7 @@ function nav(slug: string) {
     { href: `/dashboard/visitor/${slug}/forms`, label: 'Forms' },
     { href: `/dashboard/visitor/${slug}/messages`, label: 'Messages' },
     { href: `/dashboard/visitor/${slug}/files`, label: 'Files' },
+    { href: `/dashboard/visitor/${slug}/notifications`, label: 'Notifications' },
   ]
 }
 

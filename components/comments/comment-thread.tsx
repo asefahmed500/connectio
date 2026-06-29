@@ -21,7 +21,7 @@ export async function CommentThread({
 
   return (
     <div className="flex flex-col gap-4">
-      <CommentList comments={comments} viewerRole={viewer.role} clientId={clientId} />
+      <CommentList comments={comments} viewerRole={viewer.role} viewerId={viewer.id} clientId={clientId} />
       <CommentForm
         clientId={clientId}
         submissionId={submissionId}

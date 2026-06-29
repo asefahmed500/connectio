@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
 import { listAllClients } from '@/lib/dal/clients'
 import {
   Table,
@@ -32,13 +33,19 @@ export default async function AdminClientsPage({
         <h1 className="text-3xl font-heading tracking-wide">Clients</h1>
         <p className="text-sm text-muted-foreground">All clients across the system.</p>
       </div>
+      <div className="flex gap-3 mb-2">
+        <Link href="/admin/clients/create">
+          <Button variant="default">Create client</Button>
+        </Link>
+        <Link href="/admin/invites">
+          <Button variant="outline">Send invite link</Button>
+        </Link>
+      </div>
+
       {clients.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
             <p>No clients yet.</p>
-            <Link href="/admin/invites" className="text-sm text-primary hover:underline mt-2 inline-block">
-              Create an invite to add one →
-            </Link>
           </CardContent>
         </Card>
       ) : (

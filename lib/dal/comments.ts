@@ -94,6 +94,28 @@ export async function countComments(clientId: string, isInternal?: boolean): Pro
   })
 }
 
+export async function listCommentsSince(opts: {
+  clientId: string
+  since: Date
+  submissionId?: string
+}): Promise<CommentNode[]> {
+  const user = await requireClientAccess(opts.clientId)
+
+  const rows = await prisma.comment.findMany({
+    where: {
+      clientId: opts.clientId,
+      createdAt: { gt: opts.since },
+      submissionId: opts.submissionId ?? null,
+      deletedAt: null,
+      ...(user!.role === 'CLIENT' ? { isInternal: false } : {}),
+    },
+    include: { author: { select: { id: true, name: true, role: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  return rows.map((r) => toNode(r, []))
+}
+
 export async function postComment(opts: {
   clientId: string
   submissionId?: string

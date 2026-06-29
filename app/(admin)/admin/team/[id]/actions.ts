@@ -1,32 +1,39 @@
 'use server'
 
 import { z } from 'zod'
+import { revalidatePath } from 'next/cache'
 import { assignTeamToClient, unassignTeamFromClient } from '@/lib/dal/team'
 
 const AssignSchema = z.object({
-  teamMemberId: z.string().cuid(),
   clientId: z.string().cuid(),
+  teamMemberId: z.string().cuid(),
 })
 
-export async function assignAction(formData: FormData): Promise<void> {
+export async function assignAction(formData: FormData) {
   const parsed = AssignSchema.safeParse({
-    teamMemberId: formData.get('teamMemberId'),
     clientId: formData.get('clientId'),
+    teamMemberId: formData.get('teamMemberId'),
   })
   if (!parsed.success) throw new Error('Invalid input')
-  await assignTeamToClient(parsed.data)
+
+  await assignTeamToClient({
+    clientId: parsed.data.clientId,
+    teamMemberId: parsed.data.teamMemberId,
+  })
+
+  revalidatePath(`/admin/team/${parsed.data.teamMemberId}`)
+  revalidatePath(`/admin/clients/${parsed.data.clientId}`)
 }
 
-export async function unassignAction(
-  teamMemberId: string,
-  clientId: string,
-): Promise<void> {
-  const parsed = AssignSchema.safeParse({ teamMemberId, clientId })
-  if (!parsed.success) return
+export async function unassignAction(teamMemberId: string, clientId: string) {
+  const parsed = AssignSchema.safeParse({ clientId, teamMemberId })
+  if (!parsed.success) throw new Error('Invalid input')
 
-  try {
-    await unassignTeamFromClient(parsed.data)
-  } catch (err) {
-    console.error('[team] unassignAction failed:', err)
-  }
+  await unassignTeamFromClient({
+    clientId: parsed.data.clientId,
+    teamMemberId: parsed.data.teamMemberId,
+  })
+
+  revalidatePath(`/admin/team/${parsed.data.teamMemberId}`)
+  revalidatePath(`/admin/clients/${parsed.data.clientId}`)
 }
