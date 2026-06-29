@@ -57,19 +57,21 @@ export const getCurrentUser = cache(async () => {
   if (!claims) return null
 
   const user = await prisma.user.findUnique({
-    where: { id: claims.sub },
+    where: { id: claims.sub, deletedAt: null },
     select: {
       id: true,
       email: true,
       name: true,
       role: true,
       tokenVersion: true,
+      isActive: true,
       client: { select: { id: true, uniqueSlug: true } },
       teamMember: { select: { id: true } },
     },
   })
 
   if (!user) return null
+  if (!user.isActive) return null
   if (user.tokenVersion !== claims.ver) return null
 
   return user

@@ -22,6 +22,7 @@ import { LogOut } from 'lucide-react'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard' },
+  { href: '/admin/users', label: 'Users' },
   { href: '/admin/invites', label: 'Invites' },
   { href: '/admin/clients', label: 'Clients' },
   { href: '/admin/forms', label: 'Forms' },

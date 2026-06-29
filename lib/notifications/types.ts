@@ -23,6 +23,12 @@ export type NotificationEvent =
   | { type: 'FILE_UPLOADED_CLIENT'; actorId: string; clientId: string; fileName: string }
   | { type: 'FILE_UPLOADED_TEAM'; actorId: string; clientId: string; fileName: string }
   | { type: 'TEAM_MEMBER_ASSIGNED'; actorId: string; clientId: string; teamMemberUserId: string; companyName: string }
+  | { type: 'USER_UPDATED'; actorId: string; targetUserId: string }
+  | { type: 'USER_BLOCKED'; actorId: string; targetUserId: string }
+  | { type: 'USER_UNBLOCKED'; actorId: string; targetUserId: string }
+  | { type: 'USER_DELETED'; actorId: string; targetUserId: string }
+  | { type: 'USER_PASSWORD_RESET_BY_ADMIN'; actorId: string; targetUserId: string }
+  | { type: 'USER_CREATED'; actorId: string; targetUserId: string }
 
 export type NotificationDTO = {
   id: string

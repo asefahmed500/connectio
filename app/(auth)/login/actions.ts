@@ -52,20 +52,28 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     return { error: `Too many attempts. Try again in ${rl.retryAfter}s.` }
   }
 
-  let loginUser: Awaited<ReturnType<typeof prisma.user.findUnique<{
-    where: { email: string }
-    include: { client: { select: { id: true; uniqueSlug: true } } }
-  }>>>
   try {
-    loginUser = await prisma.user.findUnique({
+    const loginUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { client: { select: { id: true, uniqueSlug: true } } },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        passwordHash: true,
+        tokenVersion: true,
+        isActive: true,
+        client: { select: { id: true, uniqueSlug: true } },
+      },
     })
 
     // verifyPassword handles the null case via the dummy hash → constant time.
     const valid = await verifyPassword(loginUser?.passwordHash ?? null, password)
     if (!loginUser || !valid) {
       return { error: 'Invalid email or password.' }
+    }
+
+    if (!loginUser.isActive) {
+      return { error: 'Your account has been blocked. Contact your administrator.' }
     }
 
     // GC expired sessions opportunistically.
@@ -93,15 +101,15 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
       resource: 'User',
       resourceId: loginUser.id,
     })
+
+    // Redirect to role dashboard, or to `next` if it's under the user's own route prefix.
+    const dash = dashboardForRole(loginUser.role, loginUser.client?.uniqueSlug)
+    if (next && next !== '/' && next !== dash && next.startsWith(dash)) {
+      redirect(next)
+    }
+    redirect(dash)
   } catch (err) {
     console.error('[login] failed:', err)
     return { error: 'Something went wrong. Please try again.' }
   }
-
-  // Redirect to role dashboard, or to `next` if it's under the user's own route prefix.
-  const dash = dashboardForRole(loginUser.role, loginUser.client?.uniqueSlug)
-  if (next && next !== '/' && next !== dash && next.startsWith(dash)) {
-    redirect(next)
-  }
-  redirect(dash)
 }

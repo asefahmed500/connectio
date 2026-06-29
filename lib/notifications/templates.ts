@@ -127,6 +127,54 @@ export function renderTemplate(
         href: '/team',
         emailByDefault: false,
       }
+
+    case 'USER_UPDATED':
+      return {
+        title: 'Account updated',
+        body: 'Your account details have been updated by an administrator.',
+        href: '/login',
+        emailByDefault: false,
+      }
+
+    case 'USER_BLOCKED':
+      return {
+        title: 'Account blocked',
+        body: 'Your account has been blocked. Contact your administrator for details.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'USER_UNBLOCKED':
+      return {
+        title: 'Account restored',
+        body: 'Your account has been unblocked. You may now log in.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'USER_DELETED':
+      return {
+        title: 'Account removed',
+        body: 'Your account has been removed by an administrator.',
+        href: '/login',
+        emailByDefault: false,
+      }
+
+    case 'USER_PASSWORD_RESET_BY_ADMIN':
+      return {
+        title: 'Password reset',
+        body: 'Your password was reset by an administrator. Check your email for a new password.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'USER_CREATED':
+      return {
+        title: 'Account created',
+        body: 'Your account has been created. Check your email for login details.',
+        href: '/login',
+        emailByDefault: true,
+      }
   }
 }
 

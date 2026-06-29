@@ -61,6 +61,15 @@ export async function computeRecipients(event: NotificationEvent): Promise<strin
     case 'TEAM_MEMBER_ASSIGNED': {
       return excludeActor([event.teamMemberUserId], event.actorId)
     }
+
+    case 'USER_UPDATED':
+    case 'USER_BLOCKED':
+    case 'USER_UNBLOCKED':
+    case 'USER_DELETED':
+    case 'USER_PASSWORD_RESET_BY_ADMIN':
+    case 'USER_CREATED': {
+      return excludeActor([event.targetUserId], event.actorId)
+    }
   }
 }
 
