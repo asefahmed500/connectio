@@ -26,7 +26,7 @@
 
 ## Stack
 
-- **Next.js 16** — middleware file is `proxy.ts` (not `middleware.ts`). No `src/` dir. `@/*` -> `./*`. App Router only.
+- **Next.js 16** — middleware file is `proxy.ts` (not `middleware.ts`). No `src/` dir. `@/*` -> `./*`.
 - **shadcn/ui v4 Radix Nova** — `components.json` style `"radix-nova"`, 45 components in `components/ui/`. Icons use `data-icon="inline-start"` / `data-icon="inline-end"` (CSS target, not prop).
 - **Tailwind CSS 4** — `@import "tailwindcss"` in CSS, `@theme inline {}` block in `app/globals.css`, no `tailwind.config.ts`. oklch CSS variables. No `dark:` overrides — use semantic tokens.
 - **Prisma 6 + Postgres** — singleton at `lib/db.ts` (global-cached for dev). 3 migrations committed. Run `prisma migrate deploy` on fresh DB.
@@ -46,7 +46,7 @@ proxy.ts -> Server Components -> DAL (lib/dal/*) -> Prisma
 
 Soft deletes via `deletedAt: null` filter on User, Client, TeamMember, Form, Submission, File, Comment. **AuditLog has no `deletedAt`** (append-only).
 
-**Docs** at `docs/` (20 files, `docs/README.md` has reading order). Code is source of truth. `prd.md` is legacy — describes `pages/api/*` and `lib/prisma.ts` that don't exist.
+**Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.
 
 ## Auth
 
@@ -93,9 +93,8 @@ Refresh: `POST /api/auth/refresh` — CSRF-protected (Origin check), rate-limite
 ### Brand (in `app/globals.css`)
 
 - **Body font:** Manrope (`--font-manrope`). **Heading:** Noto Serif (`--font-heading`, `h1-h6 @apply font-heading`).
-- **Palette:** Warm sand/ochre. Primary: golden ochre `oklch(0.48 0.08 75)`. Background: warm off-white.
-- **Radius:** `--radius: 0.375rem`. Computed tokens via `calc()`.
-- Page titles use `text-3xl font-heading tracking-wide`.
+- **Page titles:** `text-3xl font-heading tracking-wide`.
+- **Palette:** Warm sand/ochre — all tokens are `oklch` CSS variables in `:root` and `.dark`.
 
 ## Notifications
 
@@ -142,5 +141,7 @@ Transport: SSE at `/api/notifications/stream` (`GET`). Polls DB every 8s. Falls 
 - **Notification list API** returns `{ items, unread }` shape — always format, even with search/filter.
 - **`.env.example`** is the authoritative env var catalog. `DATABASE_URL`, `AUTH_JWT_SECRET` required.
 - **Login action** uses `select` (not `include`) — add new fields to both the Prisma query and the type annotation.
-- **Migration naming:** use `snake_case` for consistency (`add_user_is_active` not `addUserIsActive`).
+- **`saveDraft` in DAL accepts `{ clientId, formId, formData }`** — no `submissionId`. The server action wrapper mirrors this.
+- **Server action files** at `app/(admin)/admin/clients/[id]/actions.ts` and `app/(admin)/admin/team/[id]/actions.ts` are easy to forget when building those pages.
+- **Migration naming:** use `snake_case` (`add_user_is_active` not `addUserIsActive`).
 - **Scripts** in `scripts/`: `seed-test-data.ts`, `reset-admin.ts`, `ensure-e2e-admin.ts`, `smoke-auth.ts`, `count.ts`.

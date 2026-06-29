@@ -18,15 +18,15 @@ import {
 import { Button } from '@/components/ui/button'
 import { NotificationsBell } from '@/components/notifications/notifications-bell'
 import { logoutAction } from '@/app/(auth)/logout/actions'
-import { LogOut } from 'lucide-react'
+import { LayoutDashboard, FileText, MessageSquare, Upload, Bell, LogOut } from 'lucide-react'
 
 function nav(slug: string) {
   return [
-    { href: `/dashboard/visitor/${slug}`, label: 'Dashboard' },
-    { href: `/dashboard/visitor/${slug}/forms`, label: 'Forms' },
-    { href: `/dashboard/visitor/${slug}/messages`, label: 'Messages' },
-    { href: `/dashboard/visitor/${slug}/files`, label: 'Files' },
-    { href: `/dashboard/visitor/${slug}/notifications`, label: 'Notifications' },
+    { href: `/dashboard/visitor/${slug}`, label: 'Dashboard', icon: LayoutDashboard },
+    { href: `/dashboard/visitor/${slug}/forms`, label: 'Forms', icon: FileText },
+    { href: `/dashboard/visitor/${slug}/messages`, label: 'Messages', icon: MessageSquare },
+    { href: `/dashboard/visitor/${slug}/files`, label: 'Files', icon: Upload },
+    { href: `/dashboard/visitor/${slug}/notifications`, label: 'Notifications', icon: Bell },
   ]
 }
 
@@ -42,12 +42,13 @@ export function ClientShell({
   const pathname = usePathname()
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <Sidebar>
+    <SidebarProvider defaultOpen={true}>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="px-2 py-1">
-            <div className="font-heading text-xl leading-none tracking-wide">CLIENTCONNECT</div>
-            <div className="text-xs text-muted-foreground">Client portal</div>
+          <div className="px-2 py-1 group-data-[collapsible=icon]:px-1">
+            <span className="font-heading text-xl leading-none tracking-wide group-data-[collapsible=icon]:hidden">CLIENTCONNECT</span>
+            <span className="hidden font-heading text-lg leading-none group-data-[collapsible=icon]:inline">CC</span>
+            <div className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">Client portal</div>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -56,8 +57,11 @@ export function ClientShell({
               const active = pathname === item.href
               return (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link href={item.href}>{item.label}</Link>
+                  <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )
@@ -66,8 +70,8 @@ export function ClientShell({
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter>
-          <div className="flex flex-col gap-2 px-2">
-            <span className="text-xs text-muted-foreground truncate">
+          <div className="flex flex-col gap-2 px-2 group-data-[collapsible=icon]:px-1">
+            <span className="text-xs text-muted-foreground truncate group-data-[collapsible=icon]:hidden">
               {user.email}
             </span>
             <form action={logoutAction}>
@@ -75,10 +79,10 @@ export function ClientShell({
                 type="submit"
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full group-data-[collapsible=icon]:px-1"
               >
                 <LogOut data-icon="inline-start" />
-                Sign out
+                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
               </Button>
             </form>
           </div>

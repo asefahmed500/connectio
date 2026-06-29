@@ -18,17 +18,27 @@ import {
 import { Button } from '@/components/ui/button'
 import { NotificationsBell } from '@/components/notifications/notifications-bell'
 import { logoutAction } from '@/app/(auth)/logout/actions'
-import { LogOut } from 'lucide-react'
+import {
+  LayoutDashboard,
+  Users,
+  Mail,
+  Building2,
+  FileText,
+  UsersRound,
+  Bell,
+  Settings,
+  LogOut,
+} from 'lucide-react'
 
 const NAV = [
-  { href: '/admin', label: 'Dashboard' },
-  { href: '/admin/users', label: 'Users' },
-  { href: '/admin/invites', label: 'Invites' },
-  { href: '/admin/clients', label: 'Clients' },
-  { href: '/admin/forms', label: 'Forms' },
-  { href: '/admin/team', label: 'Team' },
-  { href: '/admin/notifications', label: 'Notifications' },
-  { href: '/admin/settings', label: 'Settings' },
+  { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/admin/users', label: 'Users', icon: Users },
+  { href: '/admin/invites', label: 'Invites', icon: Mail },
+  { href: '/admin/clients', label: 'Clients', icon: Building2 },
+  { href: '/admin/forms', label: 'Forms', icon: FileText },
+  { href: '/admin/team', label: 'Team', icon: UsersRound },
+  { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
 export function AdminShell({
@@ -41,12 +51,13 @@ export function AdminShell({
   const pathname = usePathname()
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <Sidebar>
+    <SidebarProvider defaultOpen={true}>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="px-2 py-1">
-            <div className="font-heading text-xl leading-none tracking-wide">CLIENTCONNECT</div>
-            <div className="text-xs text-muted-foreground">Admin</div>
+          <div className="px-2 py-1 group-data-[collapsible=icon]:px-1">
+            <span className="font-heading text-xl leading-none tracking-wide group-data-[collapsible=icon]:hidden">CLIENTCONNECT</span>
+            <span className="hidden font-heading text-lg leading-none group-data-[collapsible=icon]:inline">CC</span>
+            <div className="text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">Admin</div>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -56,8 +67,11 @@ export function AdminShell({
                 pathname === item.href || pathname.startsWith(item.href + '/')
               return (
                 <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link href={item.href}>{item.label}</Link>
+                  <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                    <Link href={item.href}>
+                      <item.icon />
+                      <span>{item.label}</span>
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )
@@ -66,8 +80,8 @@ export function AdminShell({
         </SidebarContent>
         <SidebarSeparator />
         <SidebarFooter>
-          <div className="flex flex-col gap-2 px-2">
-            <span className="text-xs text-muted-foreground truncate">
+          <div className="flex flex-col gap-2 px-2 group-data-[collapsible=icon]:px-1">
+            <span className="text-xs text-muted-foreground truncate group-data-[collapsible=icon]:hidden">
               {user.email}
             </span>
             <form action={logoutAction}>
@@ -75,10 +89,10 @@ export function AdminShell({
                 type="submit"
                 variant="outline"
                 size="sm"
-                className="w-full"
+                className="w-full group-data-[collapsible=icon]:px-1"
               >
                 <LogOut data-icon="inline-start" />
-                Sign out
+                <span className="group-data-[collapsible=icon]:hidden">Sign out</span>
               </Button>
             </form>
           </div>
