@@ -155,10 +155,7 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 ## Known Issues & Defensive Patterns
 
 - **Variable shadowing in `$transaction` callbacks**: If the outer scope has `user` from `requirePermission()` and the transaction re-fetches `const user = await tx.user.findUnique(...)`, the inner `user` shadows the admin's identity. The audit log ends up recording the victim as the actor. **Fix: rename outer to `admin`, inner to `target`/`erasureTarget`.** This was a real bug in `lib/dal/gdpr.ts:approveErasure`.
-- **Auth guard gaps**: All team/client analytics functions in `lib/dal/analytics.ts` lack guards (callers must enforce). `getDistinctEmailCategories` and `getChainDigest` were missing guards (fixed).
-- **`disableTwoFactor` accepts a `passwordHashCheck` param but never uses it** — an attacker with a valid session can disable 2FA without re-authenticating.
-- **3 pages call `prisma` directly** (bypassing the DAL rule): `app/(admin)/admin/forms/[id]/page.tsx`, `app/(client)/dashboard/visitor/[slug]/submissions/[id]/page.tsx`, `app/(client)/dashboard/visitor/[slug]/submissions/new/page.tsx`.
-- **SCIM DAL functions have no auth guards** — auth is only at the route level via `verifyScimApiKey()`. If called directly, they're unprotected.
+- **Auth guard gaps**: All team/client analytics functions in `lib/dal/analytics.ts` lack guards (callers must enforce). SCIM DAL functions intentionally have no inline guards — auth is at the route level via `verifyScimApiKey()`.
 - **DAL file adding a `getDistinct*` helper must also add its auth guard** — `getDistinctEmailCategories` initially missed the `requirePermission('audit:read')` call.
 - **SSO form `spEntityId`**: The SSO provider form renders `spEntityId` in the General section. It was read by `createSsoAction` but silently dropped by `updateSsoAction`. Both now pass it through. When adding a new SSO config field, update both `createSsoProvider` and `updateSsoProvider` types.
 - **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.

@@ -2,6 +2,7 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { getCurrentUser } from '@/lib/dal/session'
 import { requirePermission } from '@/lib/auth/permissions'
+import { verifyPassword } from '@/lib/auth/password'
 import {
   generateTotpSecret,
   getTotpAuthUri,
@@ -79,8 +80,17 @@ export async function completeTwoFactorEnrollment(code: string): Promise<{ backu
   return { backupCodes }
 }
 
-export async function disableTwoFactor(passwordHashCheck: boolean): Promise<void> {
+export async function disableTwoFactor(password: string): Promise<void> {
   const user = await requirePermission('profile:update')
+
+  const current = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { passwordHash: true },
+  })
+  if (!current) throw new Error('User not found')
+
+  const valid = await verifyPassword(current.passwordHash, password)
+  if (!valid) throw new Error('Current password is incorrect.')
 
   await prisma.user.update({
     where: { id: user.id },

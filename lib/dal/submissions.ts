@@ -344,3 +344,22 @@ export async function isValidAgainstSchema(schema: FormSchemaV1, data: unknown) 
   const { validateSubmission } = await import('@/lib/forms/validate')
   return validateSubmission(schema, data)
 }
+
+/**
+ * List submissions for a given form (admin form detail page).
+ * Requires SUPER_ADMIN or TEAM_MEMBER role.
+ */
+export async function listSubmissionsForForm(formId: string): Promise<
+  Array<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>
+> {
+  await requireRole('SUPER_ADMIN', 'TEAM_MEMBER')
+
+  return prisma.submission.findMany({
+    where: { formId, deletedAt: null },
+    include: { client: { select: { companyName: true, uniqueSlug: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 20,
+  }) as unknown as Promise<
+    Array<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>
+  >
+}

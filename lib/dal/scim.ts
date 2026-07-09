@@ -3,6 +3,11 @@ import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
 import type { Prisma, UserRole } from '@prisma/client'
 
+// SCIM DAL functions intentionally have no inline auth guards — authentication
+// is enforced at the API route level via verifyScimApiKey() (SHA-256 bearer
+// token validation). These functions must never be called from pages or server
+// actions directly without the route-level guard.
+
 // ─────────────────────────────────────────────────────────────────────
 // SCIM 2.0 User schema helpers
 // ─────────────────────────────────────────────────────────────────────

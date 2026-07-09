@@ -20,6 +20,8 @@ export function TwoFactorSettings({ enabled }: Props) {
   const [code, setCode] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
+  const [showDisable, setShowDisable] = useState(false)
+  const [disablePassword, setDisablePassword] = useState('')
 
   const start = () => {
     setError(null)
@@ -50,8 +52,13 @@ export function TwoFactorSettings({ enabled }: Props) {
   const disable = () => {
     setError(null)
     startTransition(async () => {
-      const res = await disableEnrollmentAction()
-      if ('error' in res) setError(res.error)
+      const res = await disableEnrollmentAction(disablePassword)
+      if ('error' in res) {
+        setError(res.error)
+        return
+      }
+      setShowDisable(false)
+      setDisablePassword('')
     })
   }
 
@@ -133,11 +140,34 @@ export function TwoFactorSettings({ enabled }: Props) {
             Enable 2FA
           </Button>
         )}
-        {enabled && (
-          <Button size="sm" variant="destructive" onClick={disable} disabled={pending}>
-            {pending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+        {enabled && !showDisable && (
+          <Button size="sm" variant="destructive" onClick={() => setShowDisable(true)} disabled={pending}>
             Disable 2FA
           </Button>
+        )}
+        {enabled && showDisable && (
+          <div className="flex flex-col gap-3 p-3 rounded-md border border-destructive/30">
+            <p className="text-xs text-muted-foreground">
+              Enter your password to confirm you want to disable two-factor authentication.
+            </p>
+            <input
+              type="password"
+              value={disablePassword}
+              onChange={(e) => setDisablePassword(e.target.value)}
+              placeholder="Current password"
+              autoComplete="current-password"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <div className="flex gap-2">
+              <Button size="sm" variant="destructive" onClick={disable} disabled={pending || !disablePassword}>
+                {pending ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : null}
+                Confirm disable
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setShowDisable(false); setDisablePassword(''); setError(null) }} disabled={pending}>
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </div>

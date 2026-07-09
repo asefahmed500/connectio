@@ -1,7 +1,7 @@
 import { notFound, redirect } from 'next/navigation'
-import { prisma } from '@/lib/db'
 import { requireClientAccessBySlug } from '@/lib/dal/session'
 import { getOrCreateDraft } from '@/lib/dal/submissions'
+import { getFormForSubmission } from '@/lib/dal/forms'
 import { parseFormSchema } from '@/lib/forms/schema'
 
 // ?formId=<id> → ensure a draft exists for this client+form, then redirect
@@ -19,10 +19,8 @@ export default async function NewSubmissionPage({
 
   const clientId = await requireClientAccessBySlug(slug)
 
-  const form = await prisma.form.findFirst({
-    where: { id: formId, isActive: true, deletedAt: null },
-  })
-  if (!form) notFound()
+  const form = await getFormForSubmission(formId)
+  if (!form || !form.isActive) notFound()
   parseFormSchema(form.formSchema as unknown) // sanity: schema must be valid
 
   const draft = await getOrCreateDraft({ clientId, formId })

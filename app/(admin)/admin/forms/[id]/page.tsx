@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { prisma } from '@/lib/db'
 import { getFormDTO } from '@/lib/dal/forms'
+import { listSubmissionsForForm } from '@/lib/dal/submissions'
 import { FormEditor } from '../form-editor'
 import { FieldPreview } from './field-preview'
 
@@ -16,12 +16,7 @@ export default async function EditFormPage({
   const form = await getFormDTO(id).catch(() => null)
   if (!form) notFound()
 
-  const submissions = await prisma.submission.findMany({
-    where: { formId: id, deletedAt: null },
-    include: { client: { select: { companyName: true, uniqueSlug: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 20,
-  })
+  const submissions = await listSubmissionsForForm(id)
 
   return (
     <div className="flex flex-col gap-8 max-w-3xl">

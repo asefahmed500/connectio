@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
-import { prisma } from '@/lib/db'
 import { requireClientAccessBySlug } from '@/lib/dal/session'
 import { getSubmissionDTO } from '@/lib/dal/submissions'
+import { getFormForSubmission } from '@/lib/dal/forms'
 import { parseFormSchema } from '@/lib/forms/schema'
 import { SubmissionForm } from './submission-form'
 
@@ -18,7 +18,8 @@ export default async function SubmissionPage({
   const sub = await getSubmissionDTO(id)
   if (sub.clientId !== clientId) notFound()
 
-  const form = await prisma.form.findUniqueOrThrow({ where: { id: sub.formId, deletedAt: null } })
+  const form = await getFormForSubmission(sub.formId)
+  if (!form) notFound()
   const schema = parseFormSchema(form.formSchema as unknown)
 
   // Determine if the client can edit based on state machine.

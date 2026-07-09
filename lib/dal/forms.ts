@@ -168,3 +168,28 @@ async function writeAuditShim(action: string, userId: string, resource: string, 
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({ action, userId, resource, resourceId })
 }
+
+/**
+ * Lightweight form lookup for client submission pages (no role guard).
+ * The caller (e.g. submissions/[id], submissions/new) has already validated
+ * client access via requireClientAccessBySlug.
+ */
+export async function getFormForSubmission(formId: string): Promise<{
+  id: string
+  title: string
+  description: string | null
+  isActive: boolean
+  formSchema: object
+} | null> {
+  const form = await prisma.form.findFirst({
+    where: { id: formId, deletedAt: null },
+    select: { id: true, title: true, description: true, isActive: true, formSchema: true },
+  })
+  return form as unknown as Promise<{
+    id: string
+    title: string
+    description: string | null
+    isActive: boolean
+    formSchema: object
+  } | null>
+}

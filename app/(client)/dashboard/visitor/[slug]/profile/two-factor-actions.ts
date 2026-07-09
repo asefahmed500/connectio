@@ -27,9 +27,9 @@ export async function confirmEnrollmentAction(code: string): Promise<{ backupCod
   }
 }
 
-export async function disableEnrollmentAction(): Promise<{ ok: true } | { error: string }> {
+export async function disableEnrollmentAction(password: string): Promise<{ ok: true } | { error: string }> {
   try {
-    await disableTwoFactor(true)
+    await disableTwoFactor(password)
     return { ok: true }
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Failed to disable' }
