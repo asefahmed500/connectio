@@ -160,4 +160,6 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 - **3 pages call `prisma` directly** (bypassing the DAL rule): `app/(admin)/admin/forms/[id]/page.tsx`, `app/(client)/dashboard/visitor/[slug]/submissions/[id]/page.tsx`, `app/(client)/dashboard/visitor/[slug]/submissions/new/page.tsx`.
 - **SCIM DAL functions have no auth guards** — auth is only at the route level via `verifyScimApiKey()`. If called directly, they're unprotected.
 - **DAL file adding a `getDistinct*` helper must also add its auth guard** — `getDistinctEmailCategories` initially missed the `requirePermission('audit:read')` call.
+- **SSO form `spEntityId`**: The SSO provider form renders `spEntityId` in the General section. It was read by `createSsoAction` but silently dropped by `updateSsoAction`. Both now pass it through. When adding a new SSO config field, update both `createSsoProvider` and `updateSsoProvider` types.
+- **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.
 - **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.

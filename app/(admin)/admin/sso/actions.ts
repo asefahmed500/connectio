@@ -12,6 +12,7 @@ export async function createSsoAction(prev: unknown, formData: FormData) {
     name: raw.name as string,
     providerType: providerType as 'saml' | 'oidc',
     spEntityId: (raw.spEntityId as string) || undefined,
+    isActive: raw.isActive === 'on',
     idpEntityId: (raw.idpEntityId as string) || undefined,
     idpSsoUrl: (raw.idpSsoUrl as string) || undefined,
     idpCertificate: (raw.idpCertificate as string) || undefined,
@@ -37,6 +38,7 @@ export async function updateSsoAction(
   await updateSsoProvider(providerId, {
     name: raw.name as string,
     isActive: raw.isActive === 'on',
+    spEntityId: (raw.spEntityId as string) || null,
     idpEntityId: (raw.idpEntityId as string) || null,
     idpSsoUrl: (raw.idpSsoUrl as string) || null,
     idpCertificate: (raw.idpCertificate as string) || null,

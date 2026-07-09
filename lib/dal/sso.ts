@@ -74,6 +74,7 @@ export async function createSsoProvider(input: {
   name: string
   providerType: 'saml' | 'oidc'
   spEntityId?: string
+  isActive?: boolean
   idpEntityId?: string
   idpSsoUrl?: string
   idpCertificate?: string
@@ -92,6 +93,7 @@ export async function createSsoProvider(input: {
       name: input.name,
       providerType: input.providerType,
       spEntityId: input.spEntityId ?? 'urn:connectio:sso',
+      isActive: input.isActive ?? true,
       idpEntityId: input.idpEntityId,
       idpSsoUrl: input.idpSsoUrl,
       idpCertificate: input.idpCertificate,
@@ -121,6 +123,7 @@ export async function updateSsoProvider(
   input: Partial<{
     name: string
     isActive: boolean
+    spEntityId: string | null
     idpEntityId: string | null
     idpSsoUrl: string | null
     idpCertificate: string | null
