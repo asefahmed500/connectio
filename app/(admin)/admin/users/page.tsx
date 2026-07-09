@@ -13,6 +13,10 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
+import { ExportCsvButton } from '@/components/admin/export-csv-button'
+import { bulkBlockAction, bulkDeleteAction } from './actions'
+import { SelectAllCheckbox } from './bulk-actions'
+import { Ban, Trash2 } from 'lucide-react'
 
 export const metadata = { title: 'Users — ClientConnect' }
 
@@ -88,6 +92,18 @@ export default async function UsersPage({
               </Link>
             )}
           </form>
+          <div className="mt-3 flex justify-end">
+            <ExportCsvButton
+              fetchUrl="/api/admin/export?type=users"
+              filename="users.csv"
+              columns={[
+                { key: 'name', label: 'Name' },
+                { key: 'email', label: 'Email' },
+                { key: 'role', label: 'Role' },
+                { key: 'isActive', label: 'Active', format: (v) => v ? 'Yes' : 'No' },
+              ]}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -98,10 +114,36 @@ export default async function UsersPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="flex flex-col gap-4">
+        <form className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <SelectAllCheckbox count={result.items.length} />
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                formAction={bulkBlockAction}
+                className="inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium hover:bg-muted gap-1"
+              >
+                <Ban className="w-3 h-3" />
+                Block / Unblock
+              </button>
+              <button
+                type="submit"
+                formAction={bulkDeleteAction}
+                className="inline-flex h-8 items-center justify-center rounded-lg border border-destructive px-3 text-xs font-medium text-destructive hover:bg-destructive/10 gap-1"
+                onClick={(e) => {
+                  if (!confirm('Delete selected users? This cannot be undone.')) e.preventDefault()
+                }}
+              >
+                <Trash2 className="w-3 h-3" />
+                Delete
+              </button>
+            </div>
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
@@ -114,6 +156,15 @@ export default async function UsersPage({
             <TableBody>
               {result.items.map((u) => (
                 <TableRow key={u.id} className={cn(!u.isActive && 'opacity-60')}>
+                  <TableCell>
+                    <input
+                      type="checkbox"
+                      name="userIds"
+                      value={u.id}
+                      aria-label={`Select ${u.name}`}
+                      className="rounded border-gray-300 cursor-pointer"
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{u.name}</TableCell>
                   <TableCell className="text-sm">{u.email}</TableCell>
                   <TableCell>
@@ -164,7 +215,7 @@ export default async function UsersPage({
               </div>
             </>
           )}
-        </div>
+        </form>
       )}
     </div>
   )

@@ -1,9 +1,11 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole, requireClientAccess, getCurrentUser } from '@/lib/dal/session'
+import { requireClientAccess } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 import { proposeSlug } from '@/lib/dal/invites'
+import type { Prisma } from '@prisma/client'
 
 export type ClientDTO = {
   id: string
@@ -48,13 +50,26 @@ async function toDTO(c: {
   }
 }
 
-export async function listAllClients(params?: PaginationParams): Promise<PaginatedResult<ClientDTO>> {
-  await requireRole('SUPER_ADMIN')
+export type ClientListParams = PaginationParams & {
+  search?: string
+}
+
+export async function listAllClients(params?: ClientListParams): Promise<PaginatedResult<ClientDTO>> {
+  await requirePermission('client:read')
   const { take, skip } = paginationParams(params)
+
+  const where: Prisma.ClientWhereInput = { deletedAt: null }
+  if (params?.search) {
+    where.OR = [
+      { companyName: { contains: params.search, mode: 'insensitive' } },
+      { contactName: { contains: params.search, mode: 'insensitive' } },
+      { uniqueSlug: { contains: params.search, mode: 'insensitive' } },
+    ]
+  }
 
   const [rows, total] = await Promise.all([
     prisma.client.findMany({
-      where: { deletedAt: null },
+      where,
       orderBy: { createdAt: 'desc' },
       include: {
         _count: {
@@ -69,9 +84,7 @@ export async function listAllClients(params?: PaginationParams): Promise<Paginat
       take,
       skip,
     }),
-    prisma.client.count({
-      where: { deletedAt: null },
-    }),
+    prisma.client.count({ where }),
   ])
 
   const items = await Promise.all(rows.map(toDTO))
@@ -123,7 +136,7 @@ export async function createClientAccount(input: {
   companyName: string
   contactName: string
 }): Promise<{ userId: string; clientId: string; slug: string; password: string }> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('client:create')
   const password = generatePassword()
   const { hashPassword } = await import('@/lib/auth/password')
   const passwordHash = await hashPassword(password)
@@ -156,7 +169,7 @@ export async function createClientAccount(input: {
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
     action: 'CLIENT_ACCOUNT_CREATED',
-    userId: admin.id,
+    userId: user.id,
     resource: 'User',
     resourceId: result.id,
   })

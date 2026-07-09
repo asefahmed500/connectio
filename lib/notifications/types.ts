@@ -29,6 +29,12 @@ export type NotificationEvent =
   | { type: 'USER_DELETED'; actorId: string; targetUserId: string }
   | { type: 'USER_PASSWORD_RESET_BY_ADMIN'; actorId: string; targetUserId: string }
   | { type: 'USER_CREATED'; actorId: string; targetUserId: string }
+  | { type: 'DATA_EXPORT_REQUESTED'; actorId: string; targetUserId: string }
+  | { type: 'DATA_EXPORT_COMPLETED'; actorId: string; targetUserId: string }
+  | { type: 'ERASURE_REQUESTED'; actorId: string; targetUserId: string }
+  | { type: 'ERASURE_APPROVED'; actorId: string; targetUserId: string }
+  | { type: 'ERASURE_DENIED'; actorId: string; targetUserId: string }
+  | { type: 'AUDIT_CHAIN_BROKEN'; actorId: string; adminId: string; brokenCount: number }
 
 export type NotificationDTO = {
   id: string

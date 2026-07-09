@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import type { CommentNode } from '@/lib/dal/comments'
 
 const POLL_INTERVAL_MS = 3_000
@@ -14,7 +14,10 @@ export function useChatPoll(
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const failCountRef = useRef(0)
   const onNewRef = useRef(onNewComment)
-  onNewRef.current = onNewComment
+
+  useEffect(() => {
+    onNewRef.current = onNewComment
+  }, [onNewComment])
 
   useEffect(() => {
     if (!clientId) return

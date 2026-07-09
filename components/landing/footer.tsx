@@ -7,15 +7,15 @@ const PRODUCT_LINKS = [
 ]
 
 const RESOURCE_LINKS = [
-  { href: '/login', label: 'Documentation' },
-  { href: '/login', label: 'API status' },
-  { href: '/login', label: 'Support' },
+  { href: '#', label: 'Documentation' },
+  { href: '#', label: 'API status' },
+  { href: '#', label: 'Support' },
 ]
 
 const COMPANY_LINKS = [
-  { href: '/login', label: 'About' },
-  { href: '/login', label: 'Privacy' },
-  { href: '/login', label: 'Terms' },
+  { href: '#', label: 'About' },
+  { href: '#', label: 'Privacy' },
+  { href: '#', label: 'Terms' },
 ]
 
 export function Footer() {

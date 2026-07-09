@@ -11,32 +11,31 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const user = await getCurrentUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const file = await getFileDTO(id)
+  if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const storage = getStorage()
+  let stream
   try {
-    const { id } = await params
-    const file = await getFileDTO(id)
-    if (!file) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const storage = getStorage()
-    let stream
-    try {
-      stream = await storage.get(file.storageKey)
-    } catch {
-      return NextResponse.json({ error: 'File unavailable' }, { status: 410 })
-    }
-
-    const headers = new Headers({
-      'Content-Type': file.mimeType,
-      'Content-Length': file.size,
-      'Content-Disposition': `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      'Cache-Control': 'private, no-store',
-    })
-
-    const webStream = Readable.toWeb(stream as any) as unknown as BodyInit
-    return new Response(webStream, { headers })
-  } catch (err) {
-    console.error('[uploads] GET failed:', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    stream = await storage.get(file.storageKey)
+  } catch {
+    return NextResponse.json({ error: 'File unavailable' }, { status: 410 })
   }
+
+  const headers = new Headers({
+    'Content-Type': file.mimeType,
+    'Content-Length': file.size,
+    'Content-Disposition': `attachment; filename="${encodeURIComponent(file.originalName)}"`,
+    'Cache-Control': 'private, no-store',
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const webStream = Readable.toWeb(stream as any) as unknown as BodyInit
+  return new Response(webStream, { headers })
 }
 
 export async function DELETE(

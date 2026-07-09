@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
-import { updateUser, toggleBlockUser, adminResetPassword, deleteUser } from '@/lib/dal/users'
+import { updateUser, toggleBlockUser, adminResetPassword, deleteUser, bulkToggleBlockUser, bulkDeleteUser } from '@/lib/dal/users'
 import { sendEmail } from '@/lib/email'
 import type { UserRole } from '@prisma/client'
 
@@ -92,5 +92,27 @@ export async function deleteUserAction(userId: string) {
     revalidatePath(`/admin/users/${userId}`)
   } catch (err) {
     console.error('[users] deleteUser failed:', err)
+  }
+}
+
+export async function bulkBlockAction(formData: FormData) {
+  try {
+    await requireRole('SUPER_ADMIN')
+    const userIds = formData.getAll('userIds').map(String)
+    await bulkToggleBlockUser(userIds)
+    revalidatePath('/admin/users')
+  } catch (err) {
+    console.error('[users] bulkBlock failed:', err)
+  }
+}
+
+export async function bulkDeleteAction(formData: FormData) {
+  try {
+    await requireRole('SUPER_ADMIN')
+    const userIds = formData.getAll('userIds').map(String)
+    await bulkDeleteUser(userIds)
+    revalidatePath('/admin/users')
+  } catch (err) {
+    console.error('[users] bulkDelete failed:', err)
   }
 }

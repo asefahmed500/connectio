@@ -83,3 +83,68 @@ export async function hashRefreshToken(token: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', encoder.encode(token))
   return Buffer.from(digest).toString('hex')
 }
+
+// ─────────────────────────────────────────────────────────────────
+// MFA pending token (short-lived, single purpose: complete 2FA step)
+// ─────────────────────────────────────────────────────────────────
+
+const MFA_TTL_SECONDS = 5 * 60 // 5 minutes to complete the challenge
+
+export type MfaClaims = {
+  sub: string
+  purpose: 'mfa'
+  role: UserRole
+  clientId?: string
+  ver: number
+  iat: number
+  exp: number
+  jti: string
+}
+
+export async function signMfaToken(input: {
+  sub: string
+  role: UserRole
+  clientId?: string
+  tokenVersion: number
+}): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+  return new SignJWT({
+    sub: input.sub,
+    purpose: 'mfa',
+    role: input.role,
+    clientId: input.clientId,
+    ver: input.tokenVersion,
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt(now)
+    .setExpirationTime(now + MFA_TTL_SECONDS)
+    .setJti(crypto.randomUUID())
+    .sign(getSecret())
+}
+
+export async function verifyMfaToken(token: string | undefined): Promise<{
+  ok: boolean
+  claims?: MfaClaims
+  reason?: string
+}> {
+  if (!token) return { ok: false, reason: 'missing' }
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] })
+    if (payload.purpose !== 'mfa') return { ok: false, reason: 'invalid' }
+    return {
+      ok: true,
+      claims: {
+        sub: payload.sub as string,
+        purpose: 'mfa',
+        role: payload.role as UserRole,
+        clientId: payload.clientId as string | undefined,
+        ver: payload.ver as number,
+        iat: payload.iat!,
+        exp: payload.exp!,
+        jti: payload.jti as string,
+      },
+    }
+  } catch {
+    return { ok: false, reason: 'invalid' }
+  }
+}

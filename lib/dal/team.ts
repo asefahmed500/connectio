@@ -1,8 +1,10 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole, getCurrentUser } from '@/lib/dal/session'
+import { getCurrentUser, requireClientAccess } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
+import type { Prisma } from '@prisma/client'
 
 export type TeamMemberDTO = {
   id: string
@@ -14,13 +16,27 @@ export type TeamMemberDTO = {
   createdAt: Date
 }
 
-export async function listAllTeamMembers(params?: PaginationParams): Promise<PaginatedResult<TeamMemberDTO>> {
-  await requireRole('SUPER_ADMIN')
+export type TeamListParams = PaginationParams & {
+  search?: string
+}
+
+export async function listAllTeamMembers(params?: TeamListParams): Promise<PaginatedResult<TeamMemberDTO>> {
+  await requirePermission('team:read')
   const { take, skip } = paginationParams(params)
+
+  const where: Prisma.TeamMemberWhereInput = { deletedAt: null }
+  if (params?.search) {
+    where.user = {
+      OR: [
+        { name: { contains: params.search, mode: 'insensitive' } },
+        { email: { contains: params.search, mode: 'insensitive' } },
+      ],
+    }
+  }
 
   const [rows, total] = await Promise.all([
     prisma.teamMember.findMany({
-      where: { deletedAt: null },
+      where,
       include: {
         user: { select: { name: true, email: true } },
         _count: { select: { assignments: true } },
@@ -29,7 +45,7 @@ export async function listAllTeamMembers(params?: PaginationParams): Promise<Pag
       take,
       skip,
     }),
-    prisma.teamMember.count({ where: { deletedAt: null } }),
+    prisma.teamMember.count({ where }),
   ])
 
   const items = rows.map((r) => ({
@@ -46,7 +62,7 @@ export async function listAllTeamMembers(params?: PaginationParams): Promise<Pag
 }
 
 export const getTeamMemberDTO = cache(async (teamMemberId: string) => {
-  await requireRole('SUPER_ADMIN')
+  await requirePermission('team:read')
   const r = await prisma.teamMember.findFirst({
     where: { id: teamMemberId, deletedAt: null },
     include: {
@@ -80,7 +96,7 @@ export async function createTeamMember(input: {
   password: string
   department?: string
 }): Promise<{ id: string }> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('team:manage')
   const { hashPassword } = await import('@/lib/auth/password')
 
   // Hash OUTSIDE the create() — argon2 is slow (~80ms) and we don't want to
@@ -103,7 +119,7 @@ export async function createTeamMember(input: {
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
     action: 'TEAM_MEMBER_CREATED',
-    userId: admin.id,
+    userId: user.id,
     resource: 'User',
     resourceId: created.id,
   })
@@ -115,7 +131,7 @@ export async function assignTeamToClient(opts: {
   clientId: string
   teamMemberId: string
 }): Promise<void> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('team:manage')
   const teamMember = await prisma.teamMember.findFirst({
     where: { id: opts.teamMemberId, deletedAt: null },
     select: { id: true, userId: true },
@@ -145,7 +161,7 @@ export async function assignTeamToClient(opts: {
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'TEAM_MEMBER_ASSIGNED',
-    actorId: admin.id,
+    actorId: user.id,
     clientId: client.id,
     teamMemberUserId: teamMember.userId,
     companyName: client.companyName,
@@ -154,7 +170,7 @@ export async function assignTeamToClient(opts: {
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
     action: 'TEAM_MEMBER_ASSIGNED',
-    userId: admin.id,
+    userId: user.id,
     resource: 'Client',
     resourceId: client.id,
   })
@@ -220,8 +236,8 @@ export async function listTeamAssignments(teamMemberId: string): Promise<TeamAss
   }))
 }
 
-export async function listAssignedTeamMembers(clientId: string): Promise<{ id: string; teamMemberId: string; name: string; email: string }[]> {
-  await requireRole('SUPER_ADMIN')
+export async function listAssignedTeamMembers(clientId: string): Promise<{ id: string; teamMemberId: string; name: string; email: string; department: string | null }[]> {
+  await requireClientAccess(clientId)
   const rows = await prisma.teamAssignment.findMany({
     where: { clientId },
     include: {
@@ -238,11 +254,12 @@ export async function listAssignedTeamMembers(clientId: string): Promise<{ id: s
     teamMemberId: a.teamMember.id,
     name: a.teamMember.user.name,
     email: a.teamMember.user.email,
+    department: a.teamMember.department,
   }))
 }
 
 export async function listUnassignedTeamMembers(clientId: string): Promise<{ id: string; name: string; email: string }[]> {
-  await requireRole('SUPER_ADMIN')
+  await requirePermission('team:manage')
   const rows = await prisma.teamMember.findMany({
     where: {
       deletedAt: null,
@@ -261,7 +278,7 @@ export async function listUnassignedTeamMembers(clientId: string): Promise<{ id:
 }
 
 export async function listUnassignedClients(teamMemberId: string): Promise<{ id: string; companyName: string; uniqueSlug: string }[]> {
-  await requireRole('SUPER_ADMIN')
+  await requirePermission('team:manage')
   return prisma.client.findMany({
     where: { deletedAt: null, assignments: { none: { teamMemberId } } },
     orderBy: { companyName: 'asc' },
@@ -273,14 +290,14 @@ export async function unassignTeamFromClient(opts: {
   clientId: string
   teamMemberId: string
 }): Promise<void> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('team:manage')
   await prisma.teamAssignment.deleteMany({
     where: { clientId: opts.clientId, teamMemberId: opts.teamMemberId },
   })
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
     action: 'TEAM_MEMBER_UNASSIGNED',
-    userId: admin.id,
+    userId: user.id,
     resource: 'Client',
     resourceId: opts.clientId,
   })

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Palette } from 'lucide-react'
 
 export const metadata = { title: 'Client — ClientConnect' }
 
@@ -68,6 +69,21 @@ export default async function AdminClientDetailPage({
             <CardDescription>Files</CardDescription>
             <CardTitle className="text-2xl tabular-nums">{client.filesCount}</CardTitle>
           </CardHeader>
+        </Card>
+      </div>
+
+      <div>
+        <h2 className="text-lg font-heading tracking-wide mb-3">Portal branding</h2>
+        <Card>
+          <CardContent className="p-4">
+            <Link
+              href={`/admin/clients/${id}/branding`}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Palette className="w-4 h-4" />
+              Customize logo, colors, and portal appearance
+            </Link>
+          </CardContent>
         </Card>
       </div>
 

@@ -4,7 +4,7 @@ import { z } from 'zod'
 const schema = z.object({
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   AUTH_JWT_SECRET: z.string().min(32, 'AUTH_JWT_SECRET must be at least 32 chars'),
-  AUTH_PASSWORD_PEPPER: z.string().min(32).optional(),
+
   NEXT_PUBLIC_APP_URL: z.string().url().default('http://localhost:3000'),
 
   // Cloudflare R2 (S3-compatible object storage)

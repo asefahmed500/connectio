@@ -1,7 +1,6 @@
 'use server'
 
 import { z } from 'zod'
-import { notFound } from 'next/navigation'
 import { resetPassword } from '@/lib/dal/password-reset'
 import { rateLimit, rateLimitAll } from '@/lib/ratelimit'
 import { headers } from 'next/headers'
@@ -46,9 +45,6 @@ export async function resetPasswordAction(
   })
 
   if (!result.ok) {
-    if (result.error?.includes('expired') || result.error?.includes('Invalid')) {
-      notFound()
-    }
     return { error: result.error ?? 'Something went wrong.' }
   }
 

@@ -2,9 +2,11 @@ import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
 import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
 import { FormSchemaV1, parseFormSchema } from '@/lib/forms/schema'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 import { NotFoundError } from '@/lib/errors'
+import type { Prisma } from '@prisma/client'
 
 export type FormSummary = {
   id: string
@@ -34,21 +36,32 @@ export type ActiveFormSummary = {
   updatedAt: Date
 }
 
-export async function listAllForms(params?: PaginationParams): Promise<PaginatedResult<FormSummary>> {
-  await requireRole('SUPER_ADMIN')
+export type FormListParams = PaginationParams & {
+  search?: string
+  isActive?: boolean
+}
+
+export async function listAllForms(params?: FormListParams): Promise<PaginatedResult<FormSummary>> {
+  await requirePermission('form:read')
   const { take, skip } = paginationParams(params)
+
+  const where: Prisma.FormWhereInput = { deletedAt: null }
+  if (params?.search) {
+    where.title = { contains: params.search, mode: 'insensitive' }
+  }
+  if (params?.isActive !== undefined) {
+    where.isActive = params.isActive
+  }
 
   const [rows, total] = await Promise.all([
     prisma.form.findMany({
-      where: { deletedAt: null },
+      where,
       orderBy: { createdAt: 'desc' },
       include: { _count: { select: { submissions: true } } },
       take,
       skip,
     }),
-    prisma.form.count({
-      where: { deletedAt: null },
-    }),
+    prisma.form.count({ where }),
   ])
 
   const items = rows.map((f) => ({
@@ -109,7 +122,7 @@ export async function createForm(input: {
   description?: string
   schema: FormSchemaV1
 }): Promise<string> {
-  const user = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('form:create')
   const created = await prisma.form.create({
     data: {
       title: input.title,
@@ -131,7 +144,7 @@ export async function updateForm(
     isActive?: boolean
   },
 ): Promise<void> {
-  const user = await requireRole('SUPER_ADMIN')
+  const user = await requirePermission('form:update')
 
   // Check form exists and is not soft-deleted before updating.
   const form = await prisma.form.findFirst({ where: { id, deletedAt: null } })

@@ -2,10 +2,12 @@
 
 import { z } from 'zod'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
 import { createSession } from '@/lib/auth/session'
 import { writeAudit } from '@/lib/audit'
+import { rateLimit, rateLimitAll } from '@/lib/ratelimit'
 
 const Schema = z.object({
   slug: z.string().min(3).max(32).regex(/^[a-z0-9-]+$/),
@@ -51,6 +53,18 @@ export async function registerAction(
 
   const { slug, email, name, password } = parsed.data
   const normalizedEmail = email.toLowerCase()
+
+  const h = await headers()
+  const ip = h.get('x-forwarded-for')?.split(',')[0]?.trim()
+    ?? h.get('x-real-ip')
+    ?? 'unknown'
+  const rl = await rateLimitAll(
+    rateLimit(`invite-reg:ip:${ip}`, { limit: 5, window: 300 }),
+    rateLimit(`invite-reg:email:${normalizedEmail}`, { limit: 3, window: 600 }),
+  )
+  if (!rl.ok) {
+    return { error: `Too many attempts. Try again in ${rl.retryAfter}s.` }
+  }
 
   // Hash BEFORE the transaction — argon2 is ~80ms and we don't want to hold a
   // Postgres transaction open during it.

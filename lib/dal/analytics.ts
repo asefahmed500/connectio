@@ -58,18 +58,22 @@ export async function getSubmissionTrend(days = 14): Promise<DayBucket[]> {
   await requireRole('SUPER_ADMIN')
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
-  const [submissions, clientCreates] = await Promise.all([
-    prisma.submission.findMany({
-      where: { submittedAt: { gte: since }, deletedAt: null },
-      select: { submittedAt: true },
-    }),
-    prisma.client.findMany({
-      where: { createdAt: { gte: since } },
-      select: { createdAt: true },
-    }),
-  ])
+  const submissions = await prisma.submission.findMany({
+    where: { submittedAt: { gte: since }, deletedAt: null },
+    select: { submittedAt: true },
+  })
 
-  void clientCreates // reserved for the growth card; trend uses submissions only
+  return bucketByDay(submissions.map((s) => s.submittedAt).filter(Boolean as unknown as (d: Date | null) => d is Date), days)
+}
+
+export async function getClientGrowthTrend(days = 14): Promise<DayBucket[]> {
+  await requireRole('SUPER_ADMIN')
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  const clients = await prisma.client.findMany({
+    where: { createdAt: { gte: since } },
+    select: { createdAt: true },
+  })
 
   const buckets: DayBucket[] = []
   for (let i = days - 1; i >= 0; i--) {
@@ -81,9 +85,8 @@ export async function getSubmissionTrend(days = 14): Promise<DayBucket[]> {
     })
   }
   const byDate = new Map(buckets.map((b) => [b.date, b]))
-  for (const s of submissions) {
-    if (!s.submittedAt) continue
-    const key = s.submittedAt.toISOString().slice(0, 10)
+  for (const c of clients) {
+    const key = c.createdAt.toISOString().slice(0, 10)
     const bucket = byDate.get(key)
     if (bucket) bucket.count += 1
   }
@@ -112,7 +115,6 @@ export type ActivityItem = {
 export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
   await requireRole('SUPER_ADMIN')
 
-  // Proportional split to avoid feed bias (e.g. 7 submissions, 5 comments, 3 files for limit = 15)
   const subLimit = Math.floor(limit / 2)
   const commentLimit = Math.floor(limit / 3)
   const fileLimit = Math.max(1, limit - subLimit - commentLimit)
@@ -144,38 +146,7 @@ export async function getRecentActivity(limit = 15): Promise<ActivityItem[]> {
     }),
   ])
 
-  const items: ActivityItem[] = [
-    ...subs.map<ActivityItem>((s) => ({
-      kind: 'submission',
-      at: s.updatedAt.toISOString(),
-      href: `/admin/clients/${s.client.id}`,
-      submissionStatus: s.status,
-      formTitle: s.form.title,
-      clientId: s.client.id,
-      clientName: s.client.companyName,
-    })),
-    ...comments.map<ActivityItem>((c) => ({
-      kind: 'comment',
-      at: c.createdAt.toISOString(),
-      href: `/admin/clients/${c.client.id}`,
-      messagePreview: c.message.slice(0, 140),
-      authorName: c.author.name,
-      authorRole: c.author.role,
-      isInternal: c.isInternal,
-      clientId: c.client.id,
-      clientName: c.client.companyName,
-    })),
-    ...files.map<ActivityItem>((f) => ({
-      kind: 'file',
-      at: f.uploadedAt.toISOString(),
-      href: `/admin/clients/${f.client.id}`,
-      fileName: f.originalName,
-      clientId: f.client.id,
-      clientName: f.client.companyName,
-    })),
-  ]
-
-  return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit)
+  return buildActivityFeed(subs, comments, files, '/admin/clients/').slice(0, limit)
 }
 
 export type TopClient = {
@@ -272,4 +243,298 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     openInvites,
     clientsThisMonth,
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Team Member Analytics (scoped to assigned clients)
+// ─────────────────────────────────────────────────────────────────────
+
+async function getTeamClientIds(teamMemberId: string): Promise<string[]> {
+  const assignments = await prisma.teamAssignment.findMany({
+    where: { teamMemberId },
+    select: { clientId: true },
+  })
+  return assignments.map((a) => a.clientId)
+}
+
+export type TeamDashboardStats = {
+  totalClients: number
+  totalSubmissions: number
+  totalComments: number
+  totalFiles: number
+  pendingReview: number
+  submissionsThisMonth: number
+}
+
+export async function getTeamDashboardStats(teamMemberId: string): Promise<TeamDashboardStats> {
+  const clientIds = await getTeamClientIds(teamMemberId)
+
+  const [
+    totalSubmissions,
+    totalComments,
+    totalFiles,
+    pendingReview,
+    submissionsThisMonth,
+  ] = await Promise.all([
+    prisma.submission.count({ where: { clientId: { in: clientIds }, deletedAt: null } }),
+    prisma.comment.count({ where: { clientId: { in: clientIds }, deletedAt: null } }),
+    prisma.file.count({ where: { clientId: { in: clientIds }, deletedAt: null } }),
+    prisma.submission.count({
+      where: { clientId: { in: clientIds }, status: { in: ['SUBMITTED', 'IN_REVIEW'] }, deletedAt: null },
+    }),
+    prisma.submission.count({
+      where: {
+        clientId: { in: clientIds },
+        deletedAt: null,
+        submittedAt: { gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+      },
+    }),
+  ])
+
+  return {
+    totalClients: clientIds.length,
+    totalSubmissions,
+    totalComments,
+    totalFiles,
+    pendingReview,
+    submissionsThisMonth,
+  }
+}
+
+export async function getTeamSubmissionTrend(
+  teamMemberId: string,
+  days = 14,
+): Promise<DayBucket[]> {
+  const clientIds = await getTeamClientIds(teamMemberId)
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+  const submissions = await prisma.submission.findMany({
+    where: { clientId: { in: clientIds }, submittedAt: { gte: since }, deletedAt: null },
+    select: { submittedAt: true },
+  })
+
+  return bucketByDay(submissions.map((s) => s.submittedAt).filter(Boolean as unknown as (d: Date | null) => d is Date), days)
+}
+
+export async function getTeamStatusBreakdown(teamMemberId: string): Promise<StatusBreakdown> {
+  const clientIds = await getTeamClientIds(teamMemberId)
+  const grouped = await prisma.submission.groupBy({
+    by: ['status'],
+    where: { clientId: { in: clientIds }, deletedAt: null },
+    _count: { _all: true },
+  })
+  const empty: StatusBreakdown = {
+    DRAFT: 0, SUBMITTED: 0, IN_REVIEW: 0, CHANGES_REQUESTED: 0, APPROVED: 0, REJECTED: 0,
+  }
+  return grouped.reduce((acc, g) => { acc[g.status] = g._count._all; return acc }, empty)
+}
+
+export async function getTeamRecentActivity(
+  teamMemberId: string,
+  limit = 15,
+): Promise<ActivityItem[]> {
+  const clientIds = await getTeamClientIds(teamMemberId)
+
+  const subLimit = Math.floor(limit / 2)
+  const commentLimit = Math.floor(limit / 3)
+  const fileLimit = Math.max(1, limit - subLimit - commentLimit)
+
+  const [subs, comments, files] = await Promise.all([
+    prisma.submission.findMany({
+      take: subLimit,
+      orderBy: { updatedAt: 'desc' },
+      where: { clientId: { in: clientIds }, status: { not: 'DRAFT' }, deletedAt: null },
+      include: {
+        client: { select: { id: true, companyName: true } },
+        form: { select: { title: true } },
+      },
+    }),
+    prisma.comment.findMany({
+      take: commentLimit,
+      orderBy: { createdAt: 'desc' },
+      where: { clientId: { in: clientIds }, deletedAt: null },
+      include: {
+        client: { select: { id: true, companyName: true } },
+        author: { select: { name: true, role: true } },
+      },
+    }),
+    prisma.file.findMany({
+      take: fileLimit,
+      orderBy: { uploadedAt: 'desc' },
+      where: { clientId: { in: clientIds }, deletedAt: null },
+      include: { client: { select: { id: true, companyName: true } } },
+    }),
+  ])
+
+  return buildActivityFeed(subs, comments, files).slice(0, limit)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Client Analytics (scoped to a single client)
+// ─────────────────────────────────────────────────────────────────────
+
+export type ClientDashboardStats = {
+  totalSubmissions: number
+  totalComments: number
+  totalFiles: number
+  pendingReview: number
+}
+
+export async function getClientDashboardStats(clientId: string): Promise<ClientDashboardStats> {
+  const [totalSubmissions, totalComments, totalFiles, pendingReview] = await Promise.all([
+    prisma.submission.count({ where: { clientId, deletedAt: null } }),
+    prisma.comment.count({ where: { clientId, deletedAt: null } }),
+    prisma.file.count({ where: { clientId, deletedAt: null } }),
+    prisma.submission.count({
+      where: { clientId, status: { in: ['SUBMITTED', 'IN_REVIEW'] }, deletedAt: null },
+    }),
+  ])
+  return { totalSubmissions, totalComments, totalFiles, pendingReview }
+}
+
+export async function getClientSubmissionTrend(
+  clientId: string,
+  months = 12,
+): Promise<DayBucket[]> {
+  const since = new Date()
+  since.setMonth(since.getMonth() - months)
+
+  const submissions = await prisma.submission.findMany({
+    where: { clientId, submittedAt: { gte: since }, deletedAt: null },
+    select: { submittedAt: true },
+  })
+
+  return bucketByMonth(submissions.map((s) => s.submittedAt).filter(Boolean as unknown as (d: Date | null) => d is Date), months)
+}
+
+export async function getClientStatusBreakdown(clientId: string): Promise<StatusBreakdown> {
+  const grouped = await prisma.submission.groupBy({
+    by: ['status'],
+    where: { clientId, deletedAt: null },
+    _count: { _all: true },
+  })
+  const empty: StatusBreakdown = {
+    DRAFT: 0, SUBMITTED: 0, IN_REVIEW: 0, CHANGES_REQUESTED: 0, APPROVED: 0, REJECTED: 0,
+  }
+  return grouped.reduce((acc, g) => { acc[g.status] = g._count._all; return acc }, empty)
+}
+
+export async function getClientRecentActivity(
+  clientId: string,
+  limit = 10,
+): Promise<ActivityItem[]> {
+  const subLimit = Math.floor(limit / 2)
+  const commentLimit = Math.floor(limit / 3)
+  const fileLimit = Math.max(1, limit - subLimit - commentLimit)
+
+  const [subs, comments, files] = await Promise.all([
+    prisma.submission.findMany({
+      take: subLimit,
+      orderBy: { updatedAt: 'desc' },
+      where: { clientId, status: { not: 'DRAFT' }, deletedAt: null },
+      include: {
+        client: { select: { id: true, companyName: true } },
+        form: { select: { title: true } },
+      },
+    }),
+    prisma.comment.findMany({
+      take: commentLimit,
+      orderBy: { createdAt: 'desc' },
+      where: { clientId, deletedAt: null },
+      include: {
+        client: { select: { id: true, companyName: true } },
+        author: { select: { name: true, role: true } },
+      },
+    }),
+    prisma.file.findMany({
+      take: fileLimit,
+      orderBy: { uploadedAt: 'desc' },
+      where: { clientId, deletedAt: null },
+      include: { client: { select: { id: true, companyName: true } } },
+    }),
+  ])
+
+  return buildActivityFeed(subs, comments, files).slice(0, limit)
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────────
+
+function bucketByDay(dates: Date[], days: number): DayBucket[] {
+  const buckets: DayBucket[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+    buckets.push({
+      date: d.toISOString().slice(0, 10),
+      label: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      count: 0,
+    })
+  }
+  const byDate = new Map(buckets.map((b) => [b.date, b]))
+  for (const dt of dates) {
+    const key = dt.toISOString().slice(0, 10)
+    const bucket = byDate.get(key)
+    if (bucket) bucket.count += 1
+  }
+  return buckets
+}
+
+function bucketByMonth(dates: Date[], months: number): DayBucket[] {
+  const buckets: DayBucket[] = []
+  const now = new Date()
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    buckets.push({
+      date: d.toISOString().slice(0, 7),
+      label: d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' }),
+      count: 0,
+    })
+  }
+  const byMonth = new Map(buckets.map((b) => [b.date, b]))
+  for (const dt of dates) {
+    const key = dt.toISOString().slice(0, 7)
+    const bucket = byMonth.get(key)
+    if (bucket) bucket.count += 1
+  }
+  return buckets
+}
+
+function buildActivityFeed(
+  subs: Array<{ updatedAt: Date; status: SubmissionStatus; form: { title: string }; client: { id: string; companyName: string } }>,
+  comments: Array<{ createdAt: Date; message: string; isInternal: boolean; client: { id: string; companyName: string }; author: { name: string | null; role: string } }>,
+  files: Array<{ uploadedAt: Date; originalName: string; client: { id: string; companyName: string } }>,
+  hrefPrefix = '/clients/',
+): ActivityItem[] {
+  const items: ActivityItem[] = [
+    ...subs.map<ActivityItem>((s) => ({
+      kind: 'submission',
+      at: s.updatedAt.toISOString(),
+      href: `/clients/${s.client.id}`,
+      submissionStatus: s.status,
+      formTitle: s.form.title,
+      clientId: s.client.id,
+      clientName: s.client.companyName,
+    })),
+    ...comments.map<ActivityItem>((c) => ({
+      kind: 'comment',
+      at: c.createdAt.toISOString(),
+      href: `/clients/${c.client.id}`,
+      messagePreview: c.message.slice(0, 140),
+      authorName: c.author.name ?? 'Unknown',
+      authorRole: c.author.role,
+      isInternal: c.isInternal,
+      clientId: c.client.id,
+      clientName: c.client.companyName,
+    })),
+    ...files.map<ActivityItem>((f) => ({
+      kind: 'file',
+      at: f.uploadedAt.toISOString(),
+      href: `/clients/${f.client.id}`,
+      fileName: f.originalName,
+      clientId: f.client.id,
+      clientName: f.client.companyName,
+    })),
+  ]
+  return items.sort((a, b) => b.at.localeCompare(a.at))
 }

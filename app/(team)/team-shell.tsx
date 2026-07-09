@@ -11,14 +11,14 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
   SidebarInset,
   SidebarSeparator,
 } from '@/components/ui/sidebar'
 import { Button } from '@/components/ui/button'
 import { NotificationsBell } from '@/components/notifications/notifications-bell'
 import { logoutAction } from '@/app/(auth)/logout/actions'
-import { LayoutDashboard, Building2, Bell, LogOut } from 'lucide-react'
+import { LayoutDashboard, Building2, Bell, LogOut, PanelRight } from 'lucide-react'
 
 const NAV = [
   { href: '/team', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,6 +33,7 @@ export function TeamShell({
   user: { email: string; name: string | null }
   children: React.ReactNode
 }) {
+  const { toggleSidebar } = useSidebar()
   const pathname = usePathname()
 
   return (
@@ -86,7 +87,10 @@ export function TeamShell({
       <SidebarInset>
         <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
-            <SidebarTrigger />
+            <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
+              <PanelRight />
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
           </div>
           <NotificationsBell enabled />
         </header>

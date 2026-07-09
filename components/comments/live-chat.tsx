@@ -28,8 +28,16 @@ export function LiveChat({
   }, [])
 
   const handleDelete = useCallback((id: string) => {
-    setInitialComments((prev) => prev.filter((c) => c.id !== id && !c.replies.some((r) => r.id === id)))
-    setLiveComments((prev) => prev.filter((c) => c.id !== id))
+    setInitialComments((prev) =>
+      prev
+        .filter((c) => c.id !== id)
+        .map((c) => ({ ...c, replies: c.replies.filter((r) => r.id !== id) }))
+    )
+    setLiveComments((prev) =>
+      prev
+        .filter((c) => c.id !== id)
+        .map((c) => ({ ...c, replies: c.replies.filter((r) => r.id !== id) }))
+    )
   }, [])
 
   useChatPoll(clientId, handleNewComment, submissionId)

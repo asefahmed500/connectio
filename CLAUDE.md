@@ -48,7 +48,7 @@ ClientConnect Portal is a multi-tenant client portal with three roles (Super Adm
 1. **DAL (`lib/dal/*`)** is the only door to the database. Pattern: auth check → RBAC (`requireClientAccess`) → return plain DTO (cached for reads) → mutate in `$transaction` with `writeAudit()` → `notify()` for real-time. Soft deletes via `deletedAt` on Client, Form, Submission, File, Comment, TeamMember.
 2. **3-role RBAC** with one route group per role: `(admin)`, `(team)`, `(client)`, plus `(auth)`. Layouts enforce via `requireRole()`.
 3. **Submission state machine** (`DRAFT → SUBMITTED → IN_REVIEW → APPROVED | CHANGES_REQUESTED → SUBMITTED | REJECTED`) gated by `canTransition()` in `lib/dal/submissions.ts`. `@@unique([clientId, formId])` enforces one submission per client per form.
-4. **Notifications** — 17 event types. Adding a new event requires touching 4 files (see AGENTS.md §Notifications). SSE at `/api/notifications/stream` with polling fallback.
+4. **Notifications** — 23 event types. Adding a new event requires touching 4 files (see AGENTS.md §Notifications). SSE at `/api/notifications/stream` with polling fallback.
 5. **Storage adapter** (`lib/storage/`) — `LocalFsAdapter` in dev, `S3Adapter` auto-wires in prod when `S3_*` env vars are set. Magic-byte validation before write. Deletes are soft on the DB row; storage objects are kept.
 
 ## Available agent skills

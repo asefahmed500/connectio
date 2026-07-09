@@ -63,7 +63,7 @@ export function NotificationsBell({ enabled }: { enabled: boolean }) {
                 <Link
                   href={n.href}
                   onClick={() => setOpen(false)}
-                  className="block flex flex-col gap-0.5 hover:bg-muted/40 -mx-3 -my-2 px-3 py-2"
+                  className="flex flex-col gap-0.5 hover:bg-muted/40 -mx-3 -my-2 px-3 py-2"
                 >
                   <div className="text-sm font-medium leading-tight">{n.title}</div>
                   <div className="text-xs text-muted-foreground line-clamp-2">{n.body}</div>

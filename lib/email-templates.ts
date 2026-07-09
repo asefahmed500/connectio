@@ -1,29 +1,31 @@
 import 'server-only'
+import { renderStoredTemplate } from '@/lib/dal/email-templates'
 
-export function renderWelcomeEmail(opts: {
+export async function renderWelcomeEmail(opts: {
   contactName: string
   companyName: string
   email: string
   password: string
   loginUrl: string
-}): { subject: string; text: string; html: string } {
-  const subject = `Welcome to ClientConnect — ${opts.companyName} account created`
-  const text = [
-    `Hello ${opts.contactName},`,
-    '',
-    `Your ${opts.companyName} account on ClientConnect has been created.`,
-    '',
-    'Here are your login credentials:',
-    `  URL: ${opts.loginUrl}`,
-    `  Email: ${opts.email}`,
-    `  Password: ${opts.password}`,
-    '',
-    'For security, please change your password after logging in.',
-    '',
-    'Best regards,',
-    'The ClientConnect Team',
-  ].join('\n')
-  const html = `<!DOCTYPE html>
+}): Promise<{ subject: string; text: string; html: string }> {
+  const fallback = {
+    subject: `Welcome to ClientConnect — ${opts.companyName} account created`,
+    text: [
+      `Hello ${opts.contactName},`,
+      '',
+      `Your ${opts.companyName} account on ClientConnect has been created.`,
+      '',
+      'Here are your login credentials:',
+      `  URL: ${opts.loginUrl}`,
+      `  Email: ${opts.email}`,
+      `  Password: ${opts.password}`,
+      '',
+      'For security, please change your password after logging in.',
+      '',
+      'Best regards,',
+      'The ClientConnect Team',
+    ].join('\n'),
+    html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Manrope, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 24px;">
@@ -43,30 +45,41 @@ export function renderWelcomeEmail(opts: {
     <p>ClientConnect — Secure client portal</p>
   </div>
 </body>
-</html>`
-  return { subject, text, html }
+</html>`,
+  }
+
+  const result = await renderStoredTemplate('welcome', {
+    contactName: opts.contactName,
+    companyName: opts.companyName,
+    email: opts.email,
+    password: opts.password,
+    loginUrl: opts.loginUrl,
+  }, fallback)
+
+  return { subject: result.subject, text: result.text, html: result.html ?? fallback.html }
 }
 
-export function renderInviteEmail(opts: {
+export async function renderInviteEmail(opts: {
   contactName: string
   companyName: string
   inviteUrl: string
-}): { subject: string; text: string; html: string } {
-  const subject = `You're invited to ClientConnect — ${opts.companyName}`
-  const text = [
-    `Hello ${opts.contactName},`,
-    '',
-    `You've been invited to join ${opts.companyName} on ClientConnect.`,
-    '',
-    `Click the link below to set up your account:`,
-    `  ${opts.inviteUrl}`,
-    '',
-    'This link expires in 7 days.',
-    '',
-    'Best regards,',
-    'The ClientConnect Team',
-  ].join('\n')
-  const html = `<!DOCTYPE html>
+}): Promise<{ subject: string; text: string; html: string }> {
+  const fallback = {
+    subject: `You're invited to ClientConnect — ${opts.companyName}`,
+    text: [
+      `Hello ${opts.contactName},`,
+      '',
+      `You've been invited to join ${opts.companyName} on ClientConnect.`,
+      '',
+      `Click the link below to set up your account:`,
+      `  ${opts.inviteUrl}`,
+      '',
+      'This link expires in 7 days.',
+      '',
+      'Best regards,',
+      'The ClientConnect Team',
+    ].join('\n'),
+    html: `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family: Manrope, -apple-system, sans-serif; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto; padding: 24px;">
@@ -81,6 +94,14 @@ export function renderInviteEmail(opts: {
     <p>ClientConnect — Secure client portal</p>
   </div>
 </body>
-</html>`
-  return { subject, text, html }
+</html>`,
+  }
+
+  const result = await renderStoredTemplate('invite', {
+    contactName: opts.contactName,
+    companyName: opts.companyName,
+    inviteUrl: opts.inviteUrl,
+  }, fallback)
+
+  return { subject: result.subject, text: result.text, html: result.html ?? fallback.html }
 }

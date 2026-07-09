@@ -245,22 +245,28 @@ export async function listSubmissionsWithSchema(clientId: string): Promise<Submi
 
 export async function listSubmissionsForClient(
   clientId: string,
-  params?: PaginationParams,
+  params?: PaginationParams & { search?: string; status?: string },
 ): Promise<PaginatedResult<SubmissionDTO>> {
   await requireClientAccess(clientId)
   const { take, skip } = paginationParams(params)
 
+  const where: Prisma.SubmissionWhereInput = { clientId, deletedAt: null }
+  if (params?.search) {
+    where.form = { title: { contains: params.search, mode: 'insensitive' } }
+  }
+  if (params?.status) {
+    where.status = params.status as SubmissionStatus
+  }
+
   const [rows, total] = await Promise.all([
     prisma.submission.findMany({
-      where: { clientId, deletedAt: null },
+      where,
       include: { form: { select: { title: true } } },
       orderBy: { updatedAt: 'desc' },
       take,
       skip,
     }),
-    prisma.submission.count({
-      where: { clientId, deletedAt: null },
-    }),
+    prisma.submission.count({ where }),
   ])
 
   return toPaginated(rows.map(toDTO), total, params)

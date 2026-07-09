@@ -32,9 +32,22 @@ model User {
   // Block/unblock users without deleting accounts.
   isActive      Boolean  @default(true)
 
+  // GDPR right-to-erasure (Art 17): set when PII is anonymized.
+  anonymizedAt  DateTime?
+
   // Denormalized for cheap navbar-badge reads. (docs/14-notifications.md)
   unreadNotifications  Int       @default(0)
   lastNotificationSeenAt DateTime?
+
+  // SSO provider (null = password-based auth)
+  ssoProviderId String?
+  ssoProvider   SsoProvider? @relation(fields: [ssoProviderId], references: [id])
+
+  // TOTP-based 2FA (RFC 6238). totpSecret stores the enabled base32 secret.
+  totpEnabled        Boolean   @default(false)
+  totpSecret         String?   // active base32 secret (present when totpEnabled)
+  totpPendingSecret  String?   // base32 secret during enrollment, before verification
+  backupCodes        String[]  // SHA-256 hashes of recovery codes
 
   // Optional 1:1 profile relations
   client        Client?
@@ -47,6 +60,7 @@ model User {
   notifications Notification[]
   uploadedFiles File[]        @relation("FileUploader")
   passwordResetTokens PasswordResetToken[]
+  erasureRequest      ErasureRequest?
 
   lastLoginAt   DateTime?
   createdAt     DateTime       @default(now())
@@ -56,6 +70,7 @@ model User {
   @@index([role])
   @@index([isActive])
   @@index([deletedAt])
+  @@index([ssoProviderId])
 }
 
 enum UserRole {
@@ -79,6 +94,82 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SSO / SAML / OIDC Providers
+// ─────────────────────────────────────────────────────────────────
+
+model SsoProvider {
+  id              String   @id @default(cuid())
+  name            String
+  providerType    String   // "saml" | "oidc"
+  isActive        Boolean  @default(true)
+
+  // SAML-specific
+  idpEntityId     String?  // Entity ID from IdP metadata
+  idpSsoUrl       String?  // IdP SSO endpoint (HTTP-Redirect or HTTP-POST)
+  idpCertificate  String?  // x509 certificate for signature verification
+  spEntityId      String   @default("urn:connectio:sso") // Our SP entity ID
+  spAcsUrl        String?  // Auto-computed at runtime from base URL
+
+  // OIDC-specific
+  oidcIssuer      String?  // e.g. https://login.microsoftonline.com/{tenant}/v2.0
+  oidcDiscoveryUrl String? // Well-known OpenID configuration URL
+  oidcClientId    String?  // OIDC client ID
+  oidcClientSecret String? // OIDC client secret
+
+  // Attribute mapping (JSON string — maps IdP claims to User fields)
+  // e.g. {"email": "email", "name": "name", "role": "groups"}
+  attributeMapping Json?
+
+  // JIT provisioning: create user on first successful SSO login
+  jitProvisioning Boolean  @default(true)
+  defaultRole     UserRole @default(TEAM_MEMBER)
+
+  users           User[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([providerType])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SCIM API Keys  (for identity provider provisioning)
+// ─────────────────────────────────────────────────────────────────
+
+model ScimApiKey {
+  id          String    @id @default(cuid())
+  name        String    // human-readable label
+  keyHash     String    // SHA-256 of the bearer token
+  prefix      String    // first 8 chars of the key for identification
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+
+  @@index([keyHash])
+  @@index([isActive])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String
+  keyHash     String    @unique // SHA-256 of the bearer token
+  prefix      String    // first 8 chars of the key for ID
+  permissions String[]  // e.g. ['read:submissions', 'read:clients']
+  scopes      String[]  // resource scopes (client IDs, form IDs)
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  createdBy   String
+  createdAt   DateTime  @default(now())
+
+  @@index([keyHash])
+  @@index([isActive])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -150,6 +241,7 @@ model Client {
   comments      Comment[]
   files         File[]           @relation("ClientFiles")
   assignments   TeamAssignment[]
+  settings      ClientSettings?
 
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
@@ -157,6 +249,23 @@ model Client {
 
   @@index([uniqueSlug])
   @@index([deletedAt])
+}
+
+model ClientSettings {
+  id            String   @id @default(cuid())
+  clientId      String   @unique
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  brandColor    String?  // Primary accent color (hex)
+  logoUrl       String?  // Logo image URL for the portal header
+  faviconUrl    String?  // Favicon URL
+  portalTitle   String?  // Custom title shown in sidebar header
+  customDomain  String?  // White-label domain
+  customCss     String?  // Arbitrary CSS overrides
+  hideBranding  Boolean  @default(false) // Hide "Powered by ClientConnect"
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model TeamMember {
@@ -345,6 +454,100 @@ enum NotificationType {
   USER_UNBLOCKED
   USER_PASSWORD_RESET_BY_ADMIN
   SYSTEM_ERROR
+  DATA_EXPORT_REQUESTED
+  DATA_EXPORT_COMPLETED
+  ERASURE_REQUESTED
+  ERASURE_APPROVED
+  ERASURE_DENIED
+  AUDIT_CHAIN_BROKEN
+  SSO_PROVIDER_CREATED
+  SSO_PROVIDER_UPDATED
+  SSO_PROVIDER_DELETED
+  SSO_LOGIN_SUCCESS
+  SSO_LOGIN_FAILED
+  SCIM_USER_PROVISIONED
+  SCIM_USER_DEPROVISIONED
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Webhooks & audit forwarding
+// ─────────────────────────────────────────────────────────────────
+
+model Webhook {
+  id              String              @id @default(cuid())
+  name            String
+  url             String
+  secret          String?
+  isActive        Boolean             @default(true)
+  events          String[]            // subscribed events or ["*"] for all
+  retryCount      Int                 @default(3)
+  timeoutSec      Int                 @default(10)
+  lastDeliveredAt DateTime?
+  lastStatus      Int?
+  lastError       String?
+  createdBy       String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  deliveries      WebhookDelivery[]
+
+  @@index([isActive])
+}
+
+model WebhookDelivery {
+  id            String   @id @default(cuid())
+  webhookId     String
+  webhook       Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+  event         String
+  payload       Json
+  status        Int?
+  responseBody  String?
+  error         String?
+  attempt       Int      @default(1)
+  deliveredAt   DateTime?
+  createdAt     DateTime @default(now())
+
+  @@index([webhookId, createdAt])
+  @@index([status])
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Email logs & templates  (transactional email audit trail)
+// ─────────────────────────────────────────────────────────────────
+
+model EmailLog {
+  id          String   @id @default(cuid())
+  to          String
+  subject     String
+  category    String?  // 'welcome' | 'invite' | 'password_reset' | 'notification' | etc.
+  provider    String?  // 'gmail-oauth2' | 'gmail-app-password' | 'smtp' | 'stub'
+  status      String   @default("pending") // 'sent' | 'failed' | 'skipped'
+  error       String?
+  htmlBody    String?  // truncated to 2000 chars
+  textBody    String?  // truncated to 2000 chars
+  attempt     Int      @default(1)
+  deliveredAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([to, createdAt])
+  @@index([category, createdAt])
+  @@index([status])
+}
+
+model EmailTemplate {
+  id          String   @id @default(cuid())
+  key         String   @unique  // 'welcome' | 'invite' | 'password_reset' | 'notification'
+  name        String
+  category    String?
+  subject     String
+  htmlBody    String?
+  textBody    String?
+  variables   String?  // comma-separated variable names, e.g. "name,company,link"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -352,18 +555,43 @@ enum NotificationType {
 // ─────────────────────────────────────────────────────────────────
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action      String
-  resource    String
-  resourceId  String
-  changes     Json?
-  ip          String?
-  userAgent   String?
-  createdAt   DateTime @default(now())
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action        String
+  resource      String
+  resourceId    String
+  changes       Json?
+  ip            String?
+  userAgent     String?
+  previousHash  String?   // SHA-256 of the preceding entry (null for genesis entry)
+  hash          String?   // SHA-256 of this entry; tamper-evident chain (set by writeAudit)
+  createdAt     DateTime  @default(now())
 
   @@index([userId, createdAt])
   @@index([resource, resourceId])
   @@index([createdAt])
+  @@index([previousHash])
+}
+
+// Tracks GDPR right-to-erasure requests (Art 17) for audit trail.
+model ErasureRequest {
+  id            String       @id @default(cuid())
+  userId        String       @unique
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedBy   String       // userId who submitted the request
+  reason        String?      // optional reason for erasure
+  status        ErasureStatus @default(PENDING)
+  reviewedBy    String?      // admin who approved/denied
+  reviewedAt    DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([status])
+}
+
+enum ErasureStatus {
+  PENDING
+  APPROVED
+  DENIED
 }

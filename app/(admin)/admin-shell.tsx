@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
+  useSidebar,
   SidebarInset,
   SidebarSeparator,
 } from '@/components/ui/sidebar'
@@ -28,7 +28,14 @@ import {
   Bell,
   Settings,
   LogOut,
+  ScrollText,
+  PanelRight,
+  ShieldCheck,
+  Scale,
+  Fingerprint,
+  Shield,
 } from 'lucide-react'
+import { CommandPalette } from '@/components/admin/command-palette'
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -37,7 +44,12 @@ const NAV = [
   { href: '/admin/clients', label: 'Clients', icon: Building2 },
   { href: '/admin/forms', label: 'Forms', icon: FileText },
   { href: '/admin/team', label: 'Team', icon: UsersRound },
+  { href: '/admin/audit-log', label: 'Audit Log', icon: ScrollText },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
+  { href: '/admin/audit-log/chain', label: 'Audit Chain', icon: ShieldCheck },
+  { href: '/admin/roles', label: 'Roles', icon: Shield },
+  { href: '/admin/sso', label: 'SSO', icon: Fingerprint },
+  { href: '/admin/gdpr', label: 'GDPR', icon: Scale },
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
@@ -48,6 +60,7 @@ export function AdminShell({
   user: { email: string; name: string | null }
   children: React.ReactNode
 }) {
+  const { toggleSidebar } = useSidebar()
   const pathname = usePathname()
 
   return (
@@ -101,11 +114,20 @@ export function AdminShell({
       <SidebarInset>
         <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
           <div className="flex items-center gap-2">
-            <SidebarTrigger />
+            <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
+              <PanelRight />
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
+            <span className="text-xs text-muted-foreground hidden sm:inline">
+              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-muted">⌘K</kbd>
+            </span>
           </div>
-          <NotificationsBell enabled />
+          <div className="flex items-center gap-2">
+            <NotificationsBell enabled />
+          </div>
         </header>
         <main className="flex-1 p-8 overflow-x-auto">{children}</main>
+        <CommandPalette />
       </SidebarInset>
     </SidebarProvider>
   )

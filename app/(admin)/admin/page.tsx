@@ -9,6 +9,7 @@ import {
 import { BarChart } from '@/components/analytics/bar-chart'
 import { StatusBreakdown } from '@/components/analytics/status-breakdown'
 import { ActivityFeed } from '@/components/analytics/activity-feed'
+import { ClientGrowthChart } from '@/components/analytics/client-growth-chart'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Building2, Mail, FileText, Clock, MessageSquare, Upload } from 'lucide-react'
@@ -63,6 +64,12 @@ export default async function AdminDashboard() {
         <DashCard title="Submissions (14 days)">
           <BarChart data={trend.map((b) => ({ label: b.label, value: b.count }))} />
         </DashCard>
+        <DashCard title="Client growth (14 days)">
+          <ClientGrowthChart />
+        </DashCard>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <DashCard title="Submission status">
           <StatusBreakdown breakdown={breakdown} />
         </DashCard>

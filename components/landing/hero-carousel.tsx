@@ -49,9 +49,9 @@ export function HeroCarousel() {
 
   useEffect(() => {
     if (!api) return
-    setCount(api.scrollSnapList().length)
-    setCurrent(api.selectedScrollSnap() + 1)
-    api.on('select', () => setCurrent(api.selectedScrollSnap() + 1))
+    const onSelect = () => setCurrent(api.selectedScrollSnap() + 1)
+    api.on('select', onSelect)
+    return () => { api.off('select', onSelect) }
   }, [api])
 
   useEffect(() => {
@@ -67,7 +67,17 @@ export function HeroCarousel() {
   return (
     <section className="relative overflow-hidden bg-gradient-to-b from-background to-muted/30">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-20 pb-16 sm:pt-28 sm:pb-20">
-        <Carousel setApi={setApi} opts={{ loop: true, align: 'center' }} className="w-full">
+        <Carousel
+          setApi={(carouselApi) => {
+            setApi(carouselApi)
+            if (carouselApi) {
+              setCount(carouselApi.scrollSnapList().length)
+              setCurrent(carouselApi.selectedScrollSnap() + 1)
+            }
+          }}
+          opts={{ loop: true, align: 'center' }}
+          className="w-full"
+        >
           <CarouselContent>
             {SLIDES.map((slide) => {
               const Icon = slide.icon

@@ -3,9 +3,11 @@
 import { z } from 'zod'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
 import { verifyPassword } from '@/lib/auth/password'
 import { createSession, dashboardForRole } from '@/lib/auth/session'
+import { signMfaToken } from '@/lib/auth/tokens'
 import { writeAudit } from '@/lib/audit'
 import { rateLimit, rateLimitAll } from '@/lib/ratelimit'
 
@@ -62,6 +64,7 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
         passwordHash: true,
         tokenVersion: true,
         isActive: true,
+        totpEnabled: true,
         client: { select: { id: true, uniqueSlug: true } },
       },
     })
@@ -74,6 +77,26 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
 
     if (!loginUser.isActive) {
       return { error: 'Your account has been blocked. Contact your administrator.' }
+    }
+
+    // If 2FA is enabled, issue a short-lived MFA-pending token and redirect to
+    // the challenge page instead of creating a full session.
+    if (loginUser.totpEnabled) {
+      const mfaToken = await signMfaToken({
+        sub: loginUser.id,
+        role: loginUser.role,
+        clientId: loginUser.client?.id,
+        tokenVersion: loginUser.tokenVersion,
+      })
+      const cs = await cookies()
+      cs.set('mfa_token', mfaToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 5 * 60,
+      })
+      redirect(next && next !== '/' ? `/login/2fa?next=${encodeURIComponent(next)}` : '/login/2fa')
     }
 
     // GC expired sessions opportunistically.

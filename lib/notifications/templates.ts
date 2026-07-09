@@ -175,6 +175,54 @@ export function renderTemplate(
         href: '/login',
         emailByDefault: true,
       }
+
+    case 'DATA_EXPORT_REQUESTED':
+      return {
+        title: 'Data export requested',
+        body: 'Your data export request has been received. You will be notified when it is ready.',
+        href: '/login',
+        emailByDefault: false,
+      }
+
+    case 'DATA_EXPORT_COMPLETED':
+      return {
+        title: 'Data export ready',
+        body: 'Your data export is ready for download. Visit your account settings to download it.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'ERASURE_REQUESTED':
+      return {
+        title: 'Erasure request submitted',
+        body: 'Your erasure request has been submitted and is pending review by an administrator.',
+        href: '/login',
+        emailByDefault: false,
+      }
+
+    case 'ERASURE_APPROVED':
+      return {
+        title: 'Erasure completed',
+        body: 'Your personal data has been erased in accordance with your request.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'ERASURE_DENIED':
+      return {
+        title: 'Erasure request denied',
+        body: 'Your erasure request was not approved. Contact support for details.',
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'AUDIT_CHAIN_BROKEN':
+      return {
+        title: 'Audit chain integrity alert',
+        body: `${event.brokenCount} audit log entr${event.brokenCount === 1 ? 'y has' : 'ies have'} been tampered with. Immediate investigation required.`,
+        href: '/admin/audit-log',
+        emailByDefault: true,
+      }
   }
 }
 

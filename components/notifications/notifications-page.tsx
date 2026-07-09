@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,24 +48,25 @@ export function NotificationsPage() {
     return () => clearTimeout(debounceRef.current)
   }, [q])
 
-  const fetchItems = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
-      if (debouncedQ) params.set('q', debouncedQ)
-      if (type) params.set('type', type)
-      if (read) params.set('read', read)
-      const res = await fetch(`/api/notifications?${params}`, { credentials: 'same-origin' })
-      if (res.ok) {
-        const data = await res.json()
-        setItems(data.items ?? [])
-        setUnread(data.unread ?? 0)
-      }
-    } catch { /* ignore */ }
-    setLoading(false)
-  }, [debouncedQ, type, read])
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (debouncedQ) params.set('q', debouncedQ)
+    if (type) params.set('type', type)
+    if (read) params.set('read', read)
 
-  useEffect(() => { fetchItems() }, [fetchItems])
+    let cancelled = false
+    fetch(`/api/notifications?${params}`, { credentials: 'same-origin' })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled && data) {
+          setItems(data.items ?? [])
+          setUnread(data.unread ?? 0)
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [debouncedQ, type, read])
 
   async function handleDelete(id: string) {
     setItems((prev) => prev.filter((n) => n.id !== id))

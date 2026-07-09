@@ -63,6 +63,7 @@ export function CommentForm({
           render={({ field }) => (
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              <input type="hidden" name="isInternal" value={field.value ? 'on' : ''} />
               <span>Internal (hidden from client)</span>
             </label>
           )}

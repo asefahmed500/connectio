@@ -16,10 +16,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { cookies } from 'next/headers'
-import { redirect, notFound } from 'next/navigation'
-// NOTE: forbidden() requires experimental.authInterrupts in next.config.
-// Until that's enabled, use notFound() as a secure fallback (hides resource existence).
-const forbidden = notFound
+import { redirect, notFound, forbidden } from 'next/navigation'
 import { verifyAccessToken, type AccessClaims } from '@/lib/auth/tokens'
 import { prisma } from '@/lib/db'
 import type { UserRole } from '@prisma/client'

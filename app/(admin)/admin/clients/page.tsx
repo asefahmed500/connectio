@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { listAllClients } from '@/lib/dal/clients'
 import {
   Table,
@@ -12,20 +13,27 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { Search } from 'lucide-react'
+import { ExportCsvButton } from '@/components/admin/export-csv-button'
 
 export const metadata = { title: 'Clients — ClientConnect' }
 
 export default async function AdminClientsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; pageSize?: string }>
+  searchParams: Promise<{ page?: string; pageSize?: string; search?: string }>
 }) {
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
 
-  const result = await listAllClients({ page, pageSize })
+  const result = await listAllClients({ page, pageSize, search: params.search })
   const clients = result.items
+
+  function link(q: Record<string, string>) {
+    const p = new URLSearchParams(q)
+    return `/admin/clients?${p}`
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -33,19 +41,53 @@ export default async function AdminClientsPage({
         <h1 className="text-3xl font-heading tracking-wide">Clients</h1>
         <p className="text-sm text-muted-foreground">All clients across the system.</p>
       </div>
-      <div className="flex gap-3 mb-2">
-        <Link href="/admin/clients/create">
-          <Button variant="default">Create client</Button>
-        </Link>
-        <Link href="/admin/invites">
-          <Button variant="outline">Send invite link</Button>
-        </Link>
-      </div>
+
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex gap-3 flex-wrap items-center justify-between">
+            <div className="flex gap-3 flex-wrap items-center flex-1">
+              <form className="flex gap-3 flex-wrap items-center flex-1">
+                <div className="flex-1 min-w-0">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input name="search" defaultValue={params.search ?? ''} placeholder="Search by company, contact, or slug…" className="pl-8" />
+                  </div>
+                </div>
+                <Button type="submit" variant="outline" size="sm">Filter</Button>
+                {params.search && (
+                  <Link href="/admin/clients">
+                    <Button variant="ghost" size="sm">Clear</Button>
+                  </Link>
+                )}
+              </form>
+            </div>
+            <div className="flex gap-2">
+              <Link href="/admin/clients/create">
+                <Button variant="default" size="sm">Create client</Button>
+              </Link>
+              <Link href="/admin/invites">
+                <Button variant="outline" size="sm">Send invite</Button>
+              </Link>
+              <ExportCsvButton
+                fetchUrl="/api/admin/export?type=clients"
+                filename="clients.csv"
+                columns={[
+                  { key: 'companyName', label: 'Company' },
+                  { key: 'contactName', label: 'Contact' },
+                  { key: 'uniqueSlug', label: 'Slug' },
+                  { key: 'submissionsCount', label: 'Submissions', format: (v) => String(v) },
+                  { key: 'createdAt', label: 'Created', format: (v) => new Date(v as string).toISOString().slice(0, 10) },
+                ]}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {clients.length === 0 ? (
         <Card>
           <CardContent className="p-6 text-center text-sm text-muted-foreground">
-            <p>No clients yet.</p>
+            {params.search ? 'No clients match your search.' : 'No clients yet.'}
           </CardContent>
         </Card>
       ) : (
@@ -92,13 +134,13 @@ export default async function AdminClientsPage({
                 </div>
                 <div className="flex gap-2">
                   <Link
-                    href={`/admin/clients?page=${page - 1}&pageSize=${pageSize}`}
+                    href={link({ ...params, page: String(page - 1), pageSize: String(pageSize) })}
                     className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page <= 1 ? "pointer-events-none opacity-50" : "hover:bg-muted")}
                   >
                     Previous
                   </Link>
                   <Link
-                    href={`/admin/clients?page=${page + 1}&pageSize=${pageSize}`}
+                    href={link({ ...params, page: String(page + 1), pageSize: String(pageSize) })}
                     className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page >= result.totalPages ? "pointer-events-none opacity-50" : "hover:bg-muted")}
                   >
                     Next

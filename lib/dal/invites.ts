@@ -2,7 +2,8 @@ import 'server-only'
 import { prisma } from '@/lib/db'
 import { slugify, isValidSlug, randomSlug } from '@/lib/slug'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
-import { requireRole } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
+import type { Prisma } from '@prisma/client'
 
 /**
  * Proposes a unique slug for an invite. Tries contact name → company name →
@@ -68,17 +69,31 @@ export type InviteDTO = {
   expiresAt: Date
 }
 
-export async function listInvites(params?: PaginationParams): Promise<PaginatedResult<InviteDTO>> {
-  await requireRole('SUPER_ADMIN')
+export async function listInvites(
+  params?: PaginationParams & { search?: string; status?: string }
+): Promise<PaginatedResult<InviteDTO>> {
+  await requirePermission('invite:create')
   const { take, skip } = paginationParams(params)
+
+  const where: Prisma.InviteWhereInput = {}
+  if (params?.search) {
+    where.OR = [
+      { email: { contains: params.search, mode: 'insensitive' } },
+      { companyName: { contains: params.search, mode: 'insensitive' } },
+    ]
+  }
+  if (params?.status) {
+    where.status = params.status as unknown as import('@prisma/client').InviteStatus
+  }
 
   const [rows, total] = await Promise.all([
     prisma.invite.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       take,
       skip,
     }),
-    prisma.invite.count(),
+    prisma.invite.count({ where }),
   ])
 
   return toPaginated(rows, total, params)

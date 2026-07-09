@@ -1,7 +1,7 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole, getCurrentUser } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 import type { UserRole } from '@prisma/client'
 
@@ -42,7 +42,7 @@ function toDTO(u: {
 }
 
 export async function listUsers(params?: PaginationParams & { search?: string; role?: string; status?: string }): Promise<PaginatedResult<UserDTO>> {
-  await requireRole('SUPER_ADMIN')
+  await requirePermission('user:read')
   const { take, skip } = paginationParams(params)
 
   const where: Record<string, unknown> = { deletedAt: null }
@@ -71,7 +71,7 @@ export async function listUsers(params?: PaginationParams & { search?: string; r
 }
 
 export const getUserDTO = cache(async (userId: string) => {
-  await requireRole('SUPER_ADMIN')
+  await requirePermission('user:read')
   const u = await prisma.user.findFirst({
     where: { id: userId, deletedAt: null },
     include: { client: { select: { id: true, companyName: true, uniqueSlug: true } }, teamMember: { select: { id: true, department: true } } },
@@ -81,7 +81,7 @@ export const getUserDTO = cache(async (userId: string) => {
 })
 
 export async function updateUser(userId: string, input: { name?: string; email?: string; role?: UserRole }): Promise<void> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const me = await requirePermission('user:update')
   const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null } })
   if (!user) throw new Error('User not found')
 
@@ -96,17 +96,17 @@ export async function updateUser(userId: string, input: { name?: string; email?:
   if (Object.keys(data).length === 0) return
 
   await prisma.$transaction(async (tx) => {
-    await tx.user.update({ where: { id: userId }, data: data as any })
+    await tx.user.update({ where: { id: userId }, data })
     const { writeAudit } = await import('@/lib/audit')
-    await writeAudit({ action: 'USER_UPDATED', userId: admin.id, resource: 'User', resourceId: userId }, tx)
+    await writeAudit({ action: 'USER_UPDATED', userId: user.id, resource: 'User', resourceId: userId }, tx)
   })
 
   const { notify } = await import('@/lib/notifications/notify')
-  await notify({ type: 'USER_UPDATED', actorId: admin.id, targetUserId: userId })
+  await notify({ type: 'USER_UPDATED', actorId: user.id, targetUserId: userId })
 }
 
 export async function toggleBlockUser(userId: string): Promise<{ isActive: boolean }> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const me = await requirePermission('user:block')
   const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null } })
   if (!user) throw new Error('User not found')
 
@@ -124,7 +124,7 @@ export async function toggleBlockUser(userId: string): Promise<{ isActive: boole
     const { writeAudit } = await import('@/lib/audit')
     await writeAudit({
       action: newIsActive ? 'USER_UNBLOCKED' : 'USER_BLOCKED',
-      userId: admin.id,
+      userId: user.id,
       resource: 'User',
       resourceId: userId,
     }, tx)
@@ -133,7 +133,7 @@ export async function toggleBlockUser(userId: string): Promise<{ isActive: boole
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: newIsActive ? 'USER_UNBLOCKED' : 'USER_BLOCKED',
-    actorId: admin.id,
+    actorId: user.id,
     targetUserId: userId,
   })
 
@@ -141,7 +141,7 @@ export async function toggleBlockUser(userId: string): Promise<{ isActive: boole
 }
 
 export async function adminResetPassword(userId: string): Promise<{ password: string }> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const me = await requirePermission('user:update')
   const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null } })
   if (!user) throw new Error('User not found')
 
@@ -171,7 +171,7 @@ export async function adminResetPassword(userId: string): Promise<{ password: st
     const { writeAudit } = await import('@/lib/audit')
     await writeAudit({
       action: 'USER_PASSWORD_RESET_BY_ADMIN',
-      userId: admin.id,
+      userId: user.id,
       resource: 'User',
       resourceId: userId,
     }, tx)
@@ -180,7 +180,7 @@ export async function adminResetPassword(userId: string): Promise<{ password: st
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'USER_PASSWORD_RESET_BY_ADMIN',
-    actorId: admin.id,
+    actorId: user.id,
     targetUserId: userId,
   })
 
@@ -188,7 +188,7 @@ export async function adminResetPassword(userId: string): Promise<{ password: st
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  const admin = await requireRole('SUPER_ADMIN')
+  const me = await requirePermission('user:delete')
   const user = await prisma.user.findFirst({ where: { id: userId, deletedAt: null } })
   if (!user) throw new Error('User not found')
 
@@ -196,9 +196,78 @@ export async function deleteUser(userId: string): Promise<void> {
     await tx.user.update({ where: { id: userId }, data: { deletedAt: new Date() } })
     await tx.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } })
     const { writeAudit } = await import('@/lib/audit')
-    await writeAudit({ action: 'USER_DELETED', userId: admin.id, resource: 'User', resourceId: userId }, tx)
+    await writeAudit({ action: 'USER_DELETED', userId: user.id, resource: 'User', resourceId: userId }, tx)
   })
 
   const { notify } = await import('@/lib/notifications/notify')
-  await notify({ type: 'USER_DELETED', actorId: admin.id, targetUserId: userId })
+  await notify({ type: 'USER_DELETED', actorId: user.id, targetUserId: userId })
+}
+
+export async function bulkToggleBlockUser(userIds: string[]): Promise<{ affected: number }> {
+  const me = await requirePermission('user:block')
+  if (userIds.length === 0) return { affected: 0 }
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, deletedAt: null },
+    select: { id: true, isActive: true, tokenVersion: true },
+  })
+  if (users.length === 0) return { affected: 0 }
+
+  // Determine target state: if any are blocked, unblock all; otherwise block all
+  const anyBlocked = users.some((u) => !u.isActive)
+  const targetActive = anyBlocked
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({
+      where: { id: { in: users.map((u) => u.id) } },
+      data: {
+        isActive: targetActive,
+        tokenVersion: { increment: 1 },
+      },
+    })
+    await tx.session.updateMany({
+      where: { userId: { in: users.map((u) => u.id) }, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: targetActive ? 'USER_UNBLOCKED' : 'USER_BLOCKED',
+      userId: me.id,
+      resource: 'User',
+      resourceId: users.length === 1 ? users[0]!.id : `${users.length} users`,
+    }, tx)
+  })
+
+  return { affected: users.length }
+}
+
+export async function bulkDeleteUser(userIds: string[]): Promise<{ affected: number }> {
+  const me = await requirePermission('user:delete')
+  if (userIds.length === 0) return { affected: 0 }
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, deletedAt: null },
+    select: { id: true },
+  })
+  if (users.length === 0) return { affected: 0 }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.user.updateMany({
+      where: { id: { in: users.map((u) => u.id) } },
+      data: { deletedAt: new Date() },
+    })
+    await tx.session.updateMany({
+      where: { userId: { in: users.map((u) => u.id) }, revokedAt: null },
+      data: { revokedAt: new Date() },
+    })
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: 'USER_DELETED',
+      userId: me.id,
+      resource: 'User',
+      resourceId: users.length === 1 ? users[0]!.id : `${users.length} users`,
+    }, tx)
+  })
+
+  return { affected: users.length }
 }

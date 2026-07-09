@@ -60,7 +60,7 @@ export async function createInviteAction(
     try {
       const { sendEmail } = await import('@/lib/email')
       const { renderInviteEmail } = await import('@/lib/email-templates')
-      const tpl = renderInviteEmail({
+      const tpl = await renderInviteEmail({
         contactName: parsed.data.contactName,
         companyName: parsed.data.companyName,
         inviteUrl: inviteLink,

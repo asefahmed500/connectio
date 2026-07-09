@@ -12,6 +12,7 @@ import { Field, FieldLabel, FieldError } from '@/components/ui/field'
 import { Card, CardContent } from '@/components/ui/card'
 import { loginAction } from './actions'
 import Link from 'next/link'
+import { SsoButtons } from './sso-buttons'
 
 const emailSchema = z
   .string()
@@ -89,6 +90,7 @@ export function LoginForm() {
           {pending ? 'Signing in…' : 'Sign in'}
         </Button>
       </form>
+          <SsoButtons />
         </CardContent>
       </Card>
   )

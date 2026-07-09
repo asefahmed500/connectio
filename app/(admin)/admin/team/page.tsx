@@ -1,4 +1,6 @@
 import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { listAllTeamMembers } from '@/lib/dal/team'
 import { AddTeamMemberForm } from './add-form'
 import {
@@ -9,22 +11,30 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
+import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
+import { Search } from 'lucide-react'
+import { ExportCsvButton } from '@/components/admin/export-csv-button'
 
 export const metadata = { title: 'Team — ClientConnect' }
 
 export default async function AdminTeamPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; pageSize?: string }>
+  searchParams: Promise<{ page?: string; pageSize?: string; search?: string }>
 }) {
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
 
-  const result = await listAllTeamMembers({ page, pageSize })
+  const result = await listAllTeamMembers({ page, pageSize, search: params.search })
   const members = result.items
+
+  function link(q: Record<string, string>) {
+    const p = new URLSearchParams(q)
+    return `/admin/team?${p}`
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,10 +47,43 @@ export default async function AdminTeamPage({
 
       <AddTeamMemberForm />
 
+      <Card>
+        <CardContent className="p-3">
+          <div className="flex gap-3 flex-wrap items-center justify-between">
+            <form className="flex gap-3 flex-wrap items-center flex-1">
+              <div className="flex-1 min-w-0">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input name="search" defaultValue={params.search ?? ''} placeholder="Search by name or email…" className="pl-8" />
+                </div>
+              </div>
+              <Button type="submit" variant="outline" size="sm">Filter</Button>
+              {params.search && (
+                <Link href="/admin/team">
+                  <Button variant="ghost" size="sm">Clear</Button>
+                </Link>
+              )}
+            </form>
+            <ExportCsvButton
+              fetchUrl="/api/admin/export?type=team"
+              filename="team-members.csv"
+              columns={[
+                { key: 'name', label: 'Name' },
+                { key: 'email', label: 'Email' },
+                { key: 'department', label: 'Department', format: (v) => String(v ?? '') },
+                { key: 'assignedClientCount', label: 'Clients', format: (v) => String(v) },
+              ]}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <div>
         <h2 className="text-lg font-heading tracking-wide mb-3">All team members ({result.total})</h2>
         {members.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No team members yet.</p>
+          <p className="text-sm text-muted-foreground">
+            {params.search ? 'No team members match your search.' : 'No team members yet.'}
+          </p>
         ) : (
           <div className="flex flex-col gap-4">
             <Table>
@@ -86,13 +129,13 @@ export default async function AdminTeamPage({
                   </div>
                   <div className="flex gap-2">
                     <Link
-                      href={`/admin/team?page=${page - 1}&pageSize=${pageSize}`}
+                      href={link({ ...params, page: String(page - 1), pageSize: String(pageSize) })}
                       className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page <= 1 ? "pointer-events-none opacity-50" : "hover:bg-muted")}
                     >
                       Previous
                     </Link>
                     <Link
-                      href={`/admin/team?page=${page + 1}&pageSize=${pageSize}`}
+                      href={link({ ...params, page: String(page + 1), pageSize: String(pageSize) })}
                       className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page >= result.totalPages ? "pointer-events-none opacity-50" : "hover:bg-muted")}
                     >
                       Next

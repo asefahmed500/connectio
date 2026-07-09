@@ -51,7 +51,7 @@ export async function createClientAction(
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const loginUrl = `${appUrl}/login`
 
-  const tpl = renderWelcomeEmail({
+  const tpl = await renderWelcomeEmail({
     contactName,
     companyName,
     email,

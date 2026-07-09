@@ -67,8 +67,22 @@ export async function computeRecipients(event: NotificationEvent): Promise<strin
     case 'USER_UNBLOCKED':
     case 'USER_DELETED':
     case 'USER_PASSWORD_RESET_BY_ADMIN':
-    case 'USER_CREATED': {
+    case 'USER_CREATED':
+    case 'DATA_EXPORT_REQUESTED':
+    case 'DATA_EXPORT_COMPLETED':
+    case 'ERASURE_REQUESTED':
+    case 'ERASURE_APPROVED':
+    case 'ERASURE_DENIED': {
       return excludeActor([event.targetUserId], event.actorId)
+    }
+
+    case 'AUDIT_CHAIN_BROKEN': {
+      // Notify all admins about the broken chain
+      const admins = await prisma.user.findMany({
+        where: { role: 'SUPER_ADMIN' },
+        select: { id: true },
+      })
+      return excludeActor(admins.map((a) => a.id), event.actorId)
     }
   }
 }
