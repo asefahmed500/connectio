@@ -7,6 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest'
 import { signInAs, signOut } from '../lib/mock-headers'
 import { truncateAll, makeUser, makeClient, makeTeamMember, assignTeam } from '../lib/db'
 import { getClientDTO, listAllClients } from '@/lib/dal/clients'
+import { listInvites } from '@/lib/dal/invites'
 import { requireRole, requireClientAccess } from '@/lib/dal/session'
 
 beforeEach(async () => {
@@ -28,7 +29,7 @@ describe('requireRole', () => {
   it('rejects a TEAM_MEMBER from a SUPER_ADMIN-gated function', async () => {
     const tm = await makeTeamMember()
     await signInAs(tm.user)
-    await expect(listAllClients()).rejects.toThrow()
+    await expect(listInvites()).rejects.toThrow()
   })
 
   it('rejects a CLIENT from a SUPER_ADMIN-gated function', async () => {

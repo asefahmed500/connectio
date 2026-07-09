@@ -24,10 +24,10 @@ describe('listAllTeamMembers', () => {
     expect((await listAllTeamMembers()).total).toBeGreaterThanOrEqual(1)
   })
 
-  it('rejects a TEAM_MEMBER', async () => {
+  it('rejects a TEAM_MEMBER from admin-only team management', async () => {
     const tm = await makeTeamMember()
     await signInAs(tm.user)
-    await expect(listAllTeamMembers()).rejects.toThrow()
+    await expect(createTeamMember({ name: 'Test', email: `${tm.user.email}-fake@test.com`, password: 'Test1234!' })).rejects.toThrow()
   })
 })
 

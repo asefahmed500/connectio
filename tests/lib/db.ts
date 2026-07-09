@@ -28,14 +28,20 @@ export async function makeUser(opts: {
   email?: string
   name?: string
   tokenVersion?: number
+  password?: string
 }): Promise<{ id: string; email: string; role: UserRole; tokenVersion: number; name: string }> {
   const email = opts.email ?? `${uniq('user')}@test.local`
+  let passwordHash = 'argon2id$dummy-hash-not-valid-for-login'
+  if (opts.password) {
+    const { hashPassword } = await import('@/lib/auth/password')
+    passwordHash = await hashPassword(opts.password)
+  }
   const user = await prisma.user.create({
     data: {
       email,
       name: opts.name ?? 'Test User',
       role: opts.role,
-      passwordHash: 'argon2id$dummy-hash-not-valid-for-login',
+      passwordHash,
       tokenVersion: opts.tokenVersion ?? 0,
     },
     select: { id: true, email: true, role: true, tokenVersion: true, name: true },

@@ -6,7 +6,7 @@
 |------|---------|
 | Dev server | `npm run dev` (port 3000) |
 | Typecheck | `npm run typecheck` (fast) |
-| Build | `npm run build` (slow — final verify only; CI skips it) |
+| Build | `npm run build` (slow — final verify only) |
 | Lint | `npm run lint` |
 | Test (unit+integration) | `npm test` (vitest, sequential, needs Postgres `connectio_test`) |
 | Single test file | `npx vitest run tests/unit/pagination.test.ts` |
@@ -158,5 +158,4 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 - **Auth guard gaps**: All team/client analytics functions in `lib/dal/analytics.ts` lack guards (callers must enforce). SCIM DAL functions intentionally have no inline guards — auth is at the route level via `verifyScimApiKey()`.
 - **DAL file adding a `getDistinct*` helper must also add its auth guard** — `getDistinctEmailCategories` initially missed the `requirePermission('audit:read')` call.
 - **SSO form `spEntityId`**: The SSO provider form renders `spEntityId` in the General section. It was read by `createSsoAction` but silently dropped by `updateSsoAction`. Both now pass it through. When adding a new SSO config field, update both `createSsoProvider` and `updateSsoProvider` types.
-- **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.
 - **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.
