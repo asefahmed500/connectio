@@ -153,7 +153,7 @@ export async function scimPatchUser(
 
   for (const op of operations) {
     if (op.op === 'replace') {
-      if (op.path === 'active' || op.path === 'active') {
+      if (op.path === 'active') {
         data.isActive = op.value as boolean
       } else if (op.path === 'name.givenName' || op.path === 'name.familyName') {
         const parts = user.name.split(' ')

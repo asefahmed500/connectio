@@ -61,6 +61,7 @@ export async function listEmailLogs(params?: PaginationParams & {
 }
 
 export async function getDistinctEmailCategories(): Promise<string[]> {
+  await requirePermission('audit:read')
   const rows = await prisma.emailLog.findMany({
     where: { category: { not: null } },
     select: { category: true },

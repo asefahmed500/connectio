@@ -234,7 +234,7 @@ export async function listErasureRequests(): Promise<
 }
 
 export async function approveErasure(requestId: string): Promise<void> {
-  const user = await requirePermission('gdpr:manage')
+  const admin = await requirePermission('gdpr:manage')
 
   const request = await prisma.erasureRequest.findUnique({
     where: { id: requestId },
@@ -246,16 +246,16 @@ export async function approveErasure(requestId: string): Promise<void> {
 
   await prisma.$transaction(async (tx) => {
     // Fetch full user with relations
-    const user = await tx.user.findUnique({
+    const erasureTarget = await tx.user.findUnique({
       where: { id: request.userId },
       include: { client: true },
     })
-    if (!user) throw new NotFoundError('User')
+    if (!erasureTarget) throw new NotFoundError('User')
 
     // Anonymize user PII
-    const anonymizedEmail = `deleted-${user.id.slice(0, 8)}@redacted.connectio.test`
+    const anonymizedEmail = `deleted-${erasureTarget.id.slice(0, 8)}@redacted.connectio.test`
     await tx.user.update({
-      where: { id: user.id },
+      where: { id: erasureTarget.id },
       data: {
         email: anonymizedEmail,
         name: '[Redacted User]',
@@ -268,18 +268,18 @@ export async function approveErasure(requestId: string): Promise<void> {
 
     // Revoke all sessions
     await tx.session.updateMany({
-      where: { userId: user.id, revokedAt: null },
+      where: { userId: erasureTarget.id, revokedAt: null },
       data: { revokedAt: new Date() },
     })
 
     // Anonymize client PII if exists
-    if (user.client) {
+    if (erasureTarget.client) {
       await tx.client.update({
-        where: { id: user.client.id },
+        where: { id: erasureTarget.client.id },
         data: {
           companyName: '[Redacted Company]',
           contactName: '[Redacted Contact]',
-          uniqueSlug: `redacted-${user.client.id.slice(0, 8)}`,
+          uniqueSlug: `redacted-${erasureTarget.client.id.slice(0, 8)}`,
           projectBrief: null,
           budget: null,
           timeline: null,
@@ -292,7 +292,7 @@ export async function approveErasure(requestId: string): Promise<void> {
       where: { id: requestId },
       data: {
         status: 'APPROVED',
-        reviewedBy: user.id,
+        reviewedBy: admin.id,
         reviewedAt: new Date(),
       },
     })
@@ -302,11 +302,11 @@ export async function approveErasure(requestId: string): Promise<void> {
     await writeAudit(
       {
         action: 'ERASURE_APPROVED',
-        userId: user.id,
+        userId: admin.id,
         resource: 'User',
-        resourceId: user.id,
+        resourceId: erasureTarget.id,
         changes: {
-          before: { email: user.email, name: user.name },
+          before: { email: erasureTarget.email, name: erasureTarget.name },
           after: { email: anonymizedEmail, name: '[Redacted User]' },
         },
       },
@@ -317,7 +317,7 @@ export async function approveErasure(requestId: string): Promise<void> {
   const { notify } = await import('@/lib/notifications/notify')
   await notify({
     type: 'ERASURE_APPROVED',
-    actorId: user.id,
+    actorId: admin.id,
     targetUserId: request.userId,
   })
 }

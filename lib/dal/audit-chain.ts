@@ -105,6 +105,7 @@ export type ChainDigest = {
 }
 
 export const getChainDigest = cache(async (): Promise<ChainDigest> => {
+  await requirePermission('audit:read')
   const [count, latest] = await Promise.all([
     prisma.auditLog.count(),
     prisma.auditLog.findFirst({
