@@ -244,11 +244,11 @@ export async function createScimApiKey(name: string): Promise<{ id: string; key:
   const prefix = raw.slice(0, 8)
   const keyHash = createHash('sha256').update(raw, 'utf-8').digest('hex')
 
-  await prisma.scimApiKey.create({
+  const row = await prisma.scimApiKey.create({
     data: { name, keyHash, prefix, createdBy: user.id },
   })
 
-  return { id: prefix, key: raw, prefix }
+  return { id: row.id, key: raw, prefix }
 }
 
 export async function revokeScimApiKey(id: string): Promise<void> {
