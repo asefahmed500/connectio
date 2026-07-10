@@ -95,6 +95,17 @@ Notification list API returns `{ items, unread }` shape — always format both, 
 - E2E: Playwright on port 3001, sequential, 1 worker.
 - `tests/stubs/empty.ts` mocks `server-only` in vitest config via `resolve.alias`.
 - `tests/setup.ts` mocks `next/headers` globally, sets `AUTH_JWT_SECRET`, `DATABASE_URL`. Tests swap user via `globalThis.__ccTestToken`.
+- **Seed test data:** `npx tsx scripts/seed-test-data.ts` (idempotent; `WIPE_TEST_DATA=1` to reset). Creates 5 accounts across 3 roles with clients, forms, submissions, comments, files, notifications.
+
+### Test Accounts
+
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@clientconnect.com` | `Admin123!` | SUPER_ADMIN |
+| `team@clientconnect.com` | `Team123!` | TEAM_MEMBER |
+| `alice@acme.com` | `Client123!` | CLIENT |
+| `bob@globex.com` | `Client123!` | CLIENT |
+| `carol@initech.com` | `Client123!` | CLIENT |
 
 ## Shared Primitives
 
