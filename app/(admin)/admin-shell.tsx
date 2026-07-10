@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import { usePathname } from 'next/navigation'
 import {
   Sidebar,
@@ -35,7 +36,12 @@ import {
   Fingerprint,
   Shield,
 } from 'lucide-react'
-import { CommandPalette } from '@/components/admin/command-palette'
+
+// Lazy-load the Cmd+K palette — it's only visible on keyboard shortcut
+const CommandPalette = dynamic(
+  () => import('@/components/admin/command-palette').then((m) => ({ default: m.CommandPalette })),
+  { ssr: false },
+)
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
@@ -119,7 +125,7 @@ export function AdminShell({
               <span className="sr-only">Toggle Sidebar</span>
             </Button>
             <span className="text-xs text-muted-foreground hidden sm:inline">
-              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-muted">⌘K</kbd>
+              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-muted">&#8984;K</kbd>
             </span>
           </div>
           <div className="flex items-center gap-2">
