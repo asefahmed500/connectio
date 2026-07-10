@@ -9,7 +9,7 @@
 | Build | `npm run build` (slow — final verify only) |
 | Lint | `npm run lint` |
 | Test (unit+integration) | `npm test` (vitest, sequential, needs Postgres `connectio_test` DB with migrations applied) |
-| Test DB setup | `$env:DATABASE_URL='postgresql://.../connectio_test'; npx prisma migrate deploy` (run once after new migrations)
+| Test DB setup | `$env:DATABASE_URL='postgresql://.../connectio_test'; npx prisma migrate deploy` (run once after new migrations) |
 | Single test file | `npx vitest run tests/unit/pagination.test.ts` |
 | Single test by name | `npx vitest run -t "rejects expired tokens"` |
 | E2E | `npm run test:e2e` (Playwright, port 3001, 1 worker, sequential) |
