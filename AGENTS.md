@@ -42,6 +42,8 @@ proxy.ts → Server Components → DAL (lib/dal/*) → Prisma
 
 **DAL is the only door to the database.** Never call `prisma` from pages or actions. Pattern: `requireSession()` → `requireRole()` / `requireClientAccess()` → plain DTOs. Reads wrapped in `cache()`. Mutations in `$transaction` with `writeAudit()` + `notify()` outside tx.
 
+Client-only heavy components (palettes, chat, carousels) use `next/dynamic` with `ssr: false` — defer their bundle from the critical path.
+
 Soft deletes via `deletedAt: null` filter on User, Client, TeamMember, Form, Submission, File, Comment. **AuditLog is append-only** — no `deletedAt`, no update, no cascade delete.
 
 Route groups: `(admin)`, `(team)`, `(client)`, `(auth)`. Layouts enforce via `requireRole()`. `/invite/[slug]` is intentionally public (no proxy protection).
