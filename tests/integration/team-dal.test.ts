@@ -27,7 +27,7 @@ describe('listAllTeamMembers', () => {
   it('rejects a TEAM_MEMBER from admin-only team management', async () => {
     const tm = await makeTeamMember()
     await signInAs(tm.user)
-    await expect(createTeamMember({ name: 'Test', email: `${tm.user.email}-fake@test.com`, password: 'Test1234!' })).rejects.toThrow()
+    await expect(createTeamMember({ name: 'Test', email: `reject-${Date.now()}@test.com`, password: 'Test1234!' })).rejects.toThrow()
   })
 })
 
