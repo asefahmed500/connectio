@@ -21,15 +21,12 @@ export async function saveDraftAction(input: {
   }
 }
 
-export type SubmissionFormState =
-  | undefined
-  | { error: string }
-  | { fields?: Record<string, string[]> }
+import type { SubmitActionState } from '@/components/forms/submission-form'
 
 export async function submitAction(
-  _prev: SubmissionFormState,
+  _prev: SubmitActionState,
   formData: FormData,
-): Promise<SubmissionFormState> {
+): Promise<SubmitActionState> {
   const submissionId = formData.get('submissionId') as string
   const clientId = formData.get('clientId') as string
   const formId = formData.get('formId') as string

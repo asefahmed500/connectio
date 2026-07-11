@@ -40,6 +40,21 @@ function nav(slug: string) {
   ]
 }
 
+function ClientHeader() {
+  const { toggleSidebar } = useSidebar()
+  return (
+    <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
+          <PanelRight />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+      </div>
+      <NotificationsBell enabled />
+    </header>
+  )
+}
+
 export function ClientShell({
   user,
   slug,
@@ -51,7 +66,6 @@ export function ClientShell({
   children: React.ReactNode
   settings?: BrandSettings
 }) {
-  const { toggleSidebar } = useSidebar()
   const pathname = usePathname()
 
   const brandColor = settings?.brandColor ?? '#0EA5E9'
@@ -133,15 +147,7 @@ export function ClientShell({
           </SidebarFooter>
         </Sidebar>
         <SidebarInset>
-          <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
-                <PanelRight />
-                <span className="sr-only">Toggle Sidebar</span>
-              </Button>
-            </div>
-            <NotificationsBell enabled />
-          </header>
+          <ClientHeader />
           <main className="flex-1 p-8 overflow-x-auto">{children}</main>
         </SidebarInset>
       </SidebarProvider>

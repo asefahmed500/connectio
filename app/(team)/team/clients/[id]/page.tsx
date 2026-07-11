@@ -19,11 +19,7 @@ export default async function TeamClientDetailPage({
   const user = await getCurrentUser()
   if (!user?.teamMember) return null
 
-  try {
-    await requireClientAccess(id)
-  } catch {
-    notFound()
-  }
+  await requireClientAccess(id)
 
   const client = await getClientDTO(id)
   if (!client) notFound()

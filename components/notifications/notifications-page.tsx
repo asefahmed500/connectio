@@ -37,8 +37,8 @@ export function NotificationsPage() {
   const [unread, setUnread] = useState(0)
   const [q, setQ] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
-  const [type, setType] = useState('')
-  const [read, setRead] = useState('')
+  const [type, setType] = useState('all')
+  const [read, setRead] = useState('all')
   const [loading, setLoading] = useState(true)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const router = useRouter()
@@ -51,8 +51,8 @@ export function NotificationsPage() {
   useEffect(() => {
     const params = new URLSearchParams()
     if (debouncedQ) params.set('q', debouncedQ)
-    if (type) params.set('type', type)
-    if (read) params.set('read', read)
+    if (type !== 'all') params.set('type', type)
+    if (read !== 'all') params.set('read', read)
 
     let cancelled = false
     fetch(`/api/notifications?${params}`, { credentials: 'same-origin' })
@@ -91,7 +91,7 @@ export function NotificationsPage() {
     await fetch('/api/notifications/read-all', { method: 'POST', credentials: 'same-origin' })
   }
 
-  const hasFilters = debouncedQ || type || read
+  const hasFilters = debouncedQ !== '' || type !== 'all' || read !== 'all'
 
   return (
     <div className="flex flex-col gap-6">
@@ -138,7 +138,7 @@ export function NotificationsPage() {
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All types</SelectItem>
+                <SelectItem value="all">All types</SelectItem>
                 {TYPES.map((t) => (
                   <SelectItem key={t} value={t}>{typeLabel(t)}</SelectItem>
                 ))}
@@ -149,7 +149,7 @@ export function NotificationsPage() {
                 <SelectValue placeholder="All" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="read">Read</SelectItem>
                 <SelectItem value="unread">Unread</SelectItem>
               </SelectContent>
@@ -158,7 +158,7 @@ export function NotificationsPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setQ(''); setType(''); setRead('') }}
+                onClick={() => { setQ(''); setType('all'); setRead('all') }}
               >
                 <X data-icon="inline-start" className="h-4 w-4" />
                 Reset
@@ -192,7 +192,7 @@ export function NotificationsPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => { setQ(''); setType(''); setRead('') }}
+                  onClick={() => { setQ(''); setType('all'); setRead('all') }}
                 >
                   Clear filters
                 </Button>

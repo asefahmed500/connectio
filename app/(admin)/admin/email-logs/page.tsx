@@ -29,14 +29,16 @@ export default async function EmailLogsPage({
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
+  const categoryFilter = params.category && params.category !== 'all' ? params.category : undefined
+  const statusFilter = params.status && params.status !== 'all' ? params.status : undefined
 
   const [result, categories] = await Promise.all([
     listEmailLogs({
       page,
       pageSize,
       search: params.search,
-      category: params.category,
-      status: params.status,
+      category: categoryFilter,
+      status: statusFilter,
     }),
     getDistinctEmailCategories(),
   ])
@@ -69,7 +71,7 @@ export default async function EmailLogsPage({
                 <SelectValue placeholder="All categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All categories</SelectItem>
+                <SelectItem value="all">All categories</SelectItem>
                 {categories.map((c) => (
                   <SelectItem key={c} value={c}>{c}</SelectItem>
                 ))}
@@ -80,7 +82,7 @@ export default async function EmailLogsPage({
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All statuses</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="sent">Sent</SelectItem>
                 <SelectItem value="failed">Failed</SelectItem>
                 <SelectItem value="skipped">Skipped</SelectItem>

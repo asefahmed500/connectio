@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { listInvites } from '@/lib/dal/invites'
 import { CreateInviteForm } from './create-form'
 import { RevokeButton } from './revoke-button'
+import { ResendButton } from './resend-button'
 import {
   Table,
   TableHeader,
@@ -42,8 +43,9 @@ export default async function InvitesPage({
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
+  const statusFilter = params.status && params.status !== 'all' ? params.status : undefined
 
-  const result = await listInvites({ page, pageSize, search: params.search, status: params.status })
+  const result = await listInvites({ page, pageSize, search: params.search, status: statusFilter })
   const invites = result.items
 
   function link(q: Record<string, string>) {
@@ -76,7 +78,7 @@ export default async function InvitesPage({
                 <SelectValue placeholder="All status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All status</SelectItem>
+                <SelectItem value="all">All status</SelectItem>
                 <SelectItem value="OPEN">Open</SelectItem>
                 <SelectItem value="CONSUMED">Consumed</SelectItem>
                 <SelectItem value="EXPIRED">Expired</SelectItem>
@@ -109,7 +111,7 @@ export default async function InvitesPage({
                   <TableHead>Slug</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead></TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -122,7 +124,16 @@ export default async function InvitesPage({
                     <TableCell className="text-muted-foreground">
                       {i.createdAt.toISOString().slice(0, 10)}
                     </TableCell>
-                    <TableCell>{i.status === 'OPEN' && <RevokeButton slug={i.slug} />}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {i.status === 'OPEN' && (
+                          <>
+                            <ResendButton slug={i.slug} />
+                            <RevokeButton slug={i.slug} />
+                          </>
+                        )}
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

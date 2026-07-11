@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
 import { verifyPassword } from '@/lib/auth/password'
@@ -132,6 +133,8 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
     }
     redirect(dash)
   } catch (err) {
+    // redirect() throws NEXT_REDIRECT internally — must propagate to the framework.
+    if (isRedirectError(err)) throw err
     console.error('[login] failed:', err)
     return { error: 'Something went wrong. Please try again.' }
   }

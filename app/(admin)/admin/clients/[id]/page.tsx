@@ -45,7 +45,15 @@ export default async function AdminClientDetailPage({
         <Link href="/admin/clients" className="text-sm text-muted-foreground hover:text-foreground">
           ← All clients
         </Link>
-        <h1 className="text-3xl font-heading tracking-wide mt-2">{client.companyName}</h1>
+        <div className="flex items-center justify-between mt-2">
+          <h1 className="text-3xl font-heading tracking-wide">{client.companyName}</h1>
+          <Link
+            href={`/admin/clients/${id}/edit`}
+            className="inline-flex h-9 items-center justify-center rounded-lg border px-4 text-sm font-medium hover:bg-muted"
+          >
+            Edit details
+          </Link>
+        </div>
         <p className="text-sm text-muted-foreground">
           {client.contactName} · /{client.uniqueSlug}
         </p>

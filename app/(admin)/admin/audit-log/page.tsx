@@ -30,14 +30,16 @@ export default async function AuditLogPage({
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
+  const actionFilter = params.action && params.action !== 'all' ? params.action : undefined
+  const resourceFilter = params.resource && params.resource !== 'all' ? params.resource : undefined
 
   const [result, actions, resources] = await Promise.all([
     listAuditLogs({
       page,
       pageSize,
       search: params.search,
-      action: params.action,
-      resource: params.resource,
+      action: actionFilter,
+      resource: resourceFilter,
       dateFrom: params.dateFrom,
       dateTo: params.dateTo,
     }),
@@ -73,7 +75,7 @@ export default async function AuditLogPage({
                 <SelectValue placeholder="All actions" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All actions</SelectItem>
+                <SelectItem value="all">All actions</SelectItem>
                 {actions.map((a) => (
                   <SelectItem key={a} value={a}>{a}</SelectItem>
                 ))}
@@ -84,7 +86,7 @@ export default async function AuditLogPage({
                 <SelectValue placeholder="All resources" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All resources</SelectItem>
+                <SelectItem value="all">All resources</SelectItem>
                 {resources.map((r) => (
                   <SelectItem key={r} value={r}>{r}</SelectItem>
                 ))}

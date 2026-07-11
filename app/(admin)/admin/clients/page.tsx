@@ -75,8 +75,8 @@ export default async function AdminClientsPage({
                   { key: 'companyName', label: 'Company' },
                   { key: 'contactName', label: 'Contact' },
                   { key: 'uniqueSlug', label: 'Slug' },
-                  { key: 'submissionsCount', label: 'Submissions', format: (v) => String(v) },
-                  { key: 'createdAt', label: 'Created', format: (v) => new Date(v as string).toISOString().slice(0, 10) },
+                  { key: 'submissionsCount', label: 'Submissions', format: 'string' },
+                  { key: 'createdAt', label: 'Created', format: 'date' },
                 ]}
               />
             </div>

@@ -346,6 +346,23 @@ export async function isValidAgainstSchema(schema: FormSchemaV1, data: unknown) 
 }
 
 /**
+ * Alias: documented name for requireClientAccess on submission's client.
+ * Identical to calling requireClientAccess(sub.clientId) directly.
+ */
+export async function requireSubmissionAccess(submissionId: string): Promise<void> {
+  const sub = await prisma.submission.findFirstOrThrow({
+    where: { id: submissionId, deletedAt: null },
+    select: { clientId: true },
+  })
+  await requireClientAccess(sub.clientId)
+}
+
+/**
+ * Alias: documented name for updateStatus.
+ */
+export const updateSubmissionStatus = updateStatus
+
+/**
  * List submissions for a given form (admin form detail page).
  * Requires SUPER_ADMIN or TEAM_MEMBER role.
  */

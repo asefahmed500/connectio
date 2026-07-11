@@ -72,7 +72,7 @@ export default async function FormsListPage({
                   <SelectValue placeholder="All status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All status</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   <SelectItem value="true">Active</SelectItem>
                   <SelectItem value="false">Inactive</SelectItem>
                 </SelectContent>
@@ -89,9 +89,9 @@ export default async function FormsListPage({
               filename="forms.csv"
               columns={[
                 { key: 'title', label: 'Title' },
-                { key: 'fieldCount', label: 'Fields', format: (v) => String(v) },
-                { key: 'submissionCount', label: 'Submissions', format: (v) => String(v) },
-                { key: 'isActive', label: 'Active', format: (v) => v ? 'Yes' : 'No' },
+                { key: 'fieldCount', label: 'Fields', format: 'string' },
+                { key: 'submissionCount', label: 'Submissions', format: 'string' },
+                { key: 'isActive', label: 'Active', format: 'boolean' },
               ]}
             />
           </div>

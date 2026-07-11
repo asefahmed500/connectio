@@ -130,6 +130,23 @@ function generatePassword(): string {
   return [...required, ...rest].sort(() => Math.random() - 0.5).join('')
 }
 
+export async function updateClient(
+  clientId: string,
+  input: {
+    companyName?: string
+    contactName?: string
+    projectBrief?: string | null
+    budget?: string | null
+    timeline?: string | null
+  },
+): Promise<void> {
+  await requirePermission('client:update')
+  await prisma.client.update({
+    where: { id: clientId, deletedAt: null },
+    data: input,
+  })
+}
+
 export async function createClientAccount(input: {
   email: string
   name: string

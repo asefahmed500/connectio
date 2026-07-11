@@ -3,30 +3,90 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
+import { requirePermission } from '@/lib/auth/permissions'
+import { updateClient } from '@/lib/dal/clients'
 import { assignTeamToClient, unassignTeamFromClient } from '@/lib/dal/team'
 
-const AssignSchema = z.object({
-  clientId: z.string().cuid(),
-  teamMemberId: z.string().cuid(),
+const UpdateSchema = z.object({
+  companyName: z.string().min(1).max(120).optional(),
+  contactName: z.string().min(1).max(120).optional(),
+  projectBrief: z.string().max(2000).optional(),
+  budget: z.string().max(200).optional(),
+  timeline: z.string().max(200).optional(),
 })
 
-export async function assignTeamMemberAction(formData: FormData) {
-  await requireRole('SUPER_ADMIN')
-  const parsed = AssignSchema.safeParse({
-    clientId: formData.get('clientId'),
-    teamMemberId: formData.get('teamMemberId'),
-  })
-  if (!parsed.success) throw new Error('Invalid input')
+export type UpdateClientState =
+  | undefined
+  | { error: string }
+  | { success: true }
 
-  await assignTeamToClient(parsed.data)
-  revalidatePath(`/admin/clients/${parsed.data.clientId}`)
+export async function updateClientAction(
+  clientId: string,
+  _prev: UpdateClientState,
+  formData: FormData,
+): Promise<UpdateClientState> {
+  const user = await requirePermission('client:update')
+
+  const parsed = UpdateSchema.safeParse({
+    companyName: formData.get('companyName') || undefined,
+    contactName: formData.get('contactName') || undefined,
+    projectBrief: formData.get('projectBrief') || undefined,
+    budget: formData.get('budget') || undefined,
+    timeline: formData.get('timeline') || undefined,
+  })
+
+  if (!parsed.success) return { error: 'Please fill all fields correctly.' }
+
+  try {
+    await updateClient(clientId, parsed.data)
+
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: 'CLIENT_UPDATED',
+      userId: user.id,
+      resource: 'Client',
+      resourceId: clientId,
+    })
+
+    revalidatePath(`/admin/clients/${clientId}`)
+    return { success: true }
+  } catch (err) {
+    console.error('[clients] update failed:', err)
+    return { error: 'Failed to update client. Please try again.' }
+  }
 }
 
-export async function unassignTeamMemberAction(teamMemberId: string, clientId: string) {
-  await requireRole('SUPER_ADMIN')
-  const parsed = AssignSchema.safeParse({ clientId, teamMemberId })
-  if (!parsed.success) throw new Error('Invalid input')
+export async function assignTeamMemberAction(formData: FormData): Promise<void> {
+  const user = await requireRole('SUPER_ADMIN')
+  const clientId = formData.get('clientId') as string
+  const teamMemberId = formData.get('teamMemberId') as string
+  if (!clientId || !teamMemberId) return
 
-  await unassignTeamFromClient(parsed.data)
-  revalidatePath(`/admin/clients/${parsed.data.clientId}`)
+  await assignTeamToClient({ clientId, teamMemberId })
+
+  const { writeAudit } = await import('@/lib/audit')
+  await writeAudit({
+    action: 'TEAM_ASSIGNMENT_CREATED',
+    userId: user.id,
+    resource: 'TeamAssignment',
+    resourceId: `${teamMemberId}_${clientId}`,
+  })
+
+  revalidatePath(`/admin/clients/${clientId}`)
+}
+
+export async function unassignTeamMemberAction(teamMemberId: string, clientId: string): Promise<void> {
+  const user = await requireRole('SUPER_ADMIN')
+
+  await unassignTeamFromClient({ teamMemberId, clientId })
+
+  const { writeAudit } = await import('@/lib/audit')
+  await writeAudit({
+    action: 'TEAM_ASSIGNMENT_DELETED',
+    userId: user.id,
+    resource: 'TeamAssignment',
+    resourceId: `${teamMemberId}_${clientId}`,
+  })
+
+  revalidatePath(`/admin/clients/${clientId}`)
 }

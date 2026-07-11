@@ -70,8 +70,8 @@ export default async function AdminTeamPage({
               columns={[
                 { key: 'name', label: 'Name' },
                 { key: 'email', label: 'Email' },
-                { key: 'department', label: 'Department', format: (v) => String(v ?? '') },
-                { key: 'assignedClientCount', label: 'Clients', format: (v) => String(v) },
+                { key: 'department', label: 'Department', format: 'string' },
+                { key: 'assignedClientCount', label: 'Clients', format: 'string' },
               ]}
             />
           </div>

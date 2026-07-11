@@ -59,6 +59,26 @@ const NAV = [
   { href: '/admin/settings', label: 'Settings', icon: Settings },
 ]
 
+function AdminHeader() {
+  const { toggleSidebar } = useSidebar()
+  return (
+    <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
+      <div className="flex items-center gap-2">
+        <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
+          <PanelRight />
+          <span className="sr-only">Toggle Sidebar</span>
+        </Button>
+        <span className="text-xs text-muted-foreground hidden sm:inline">
+          <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-muted">&#8984;K</kbd>
+        </span>
+      </div>
+      <div className="flex items-center gap-2">
+        <NotificationsBell enabled />
+      </div>
+    </header>
+  )
+}
+
 export function AdminShell({
   user,
   children,
@@ -66,7 +86,6 @@ export function AdminShell({
   user: { email: string; name: string | null }
   children: React.ReactNode
 }) {
-  const { toggleSidebar } = useSidebar()
   const pathname = usePathname()
 
   return (
@@ -118,20 +137,7 @@ export function AdminShell({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <header className="flex h-12 shrink-0 items-center justify-between border-b px-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon-sm" onClick={toggleSidebar}>
-              <PanelRight />
-              <span className="sr-only">Toggle Sidebar</span>
-            </Button>
-            <span className="text-xs text-muted-foreground hidden sm:inline">
-              <kbd className="rounded border px-1.5 py-0.5 text-[10px] font-mono bg-muted">&#8984;K</kbd>
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <NotificationsBell enabled />
-          </div>
-        </header>
+        <AdminHeader />
         <main className="flex-1 p-8 overflow-x-auto">{children}</main>
         <CommandPalette />
       </SidebarInset>

@@ -50,13 +50,14 @@ export default async function ClientDashboard({
   const { slug } = await params
   const sp = await searchParams
   const clientId = await requireClientAccessBySlug(slug)
+  const statusFilter = sp.status && sp.status !== 'all' ? sp.status : undefined
 
   const [stats, trend, breakdown, activity, submissions, comments, files] = await Promise.all([
     getClientDashboardStats(clientId),
     getClientSubmissionTrend(clientId, 12),
     getClientStatusBreakdown(clientId),
     getClientRecentActivity(clientId, 10),
-    listSubmissionsForClient(clientId, { search: sp.search, status: sp.status }),
+    listSubmissionsForClient(clientId, { search: sp.search, status: statusFilter }),
     countComments(clientId, false),
     listFilesForClient(clientId),
   ])
@@ -156,7 +157,7 @@ export default async function ClientDashboard({
                   <SelectValue placeholder="All status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All status</SelectItem>
+                  <SelectItem value="all">All status</SelectItem>
                   <SelectItem value="DRAFT">Draft</SelectItem>
                   <SelectItem value="SUBMITTED">Submitted</SelectItem>
                   <SelectItem value="IN_REVIEW">In review</SelectItem>

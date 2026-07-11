@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
-import { proposeSlug } from '@/lib/dal/invites'
+import { createInvite, resendInvite } from '@/lib/dal/invites'
 import { prisma } from '@/lib/db'
 import { writeAudit } from '@/lib/audit'
 
@@ -31,19 +31,7 @@ export async function createInviteAction(
   if (!parsed.success) return { error: 'Please fill all fields correctly.' }
 
   try {
-    const slug = await proposeSlug(parsed.data)
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-
-    const invite = await prisma.invite.create({
-      data: {
-        email: parsed.data.email.toLowerCase(),
-        companyName: parsed.data.companyName,
-        contactName: parsed.data.contactName,
-        slug,
-        createdBy: user.id,
-        expiresAt,
-      },
-    })
+    const invite = await createInvite({ ...parsed.data, createdBy: user.id })
 
     const { writeAudit } = await import('@/lib/audit')
     await writeAudit({
@@ -74,6 +62,31 @@ export async function createInviteAction(
   } catch (err) {
     console.error('[invites] createInvite failed:', err)
     return { error: 'Failed to create invite. Please try again.' }
+  }
+}
+
+export async function resendInviteAction(slug: string): Promise<void> {
+  await requireRole('SUPER_ADMIN')
+  const invite = await prisma.invite.findUnique({ where: { slug } })
+  if (!invite || invite.status !== 'OPEN') return
+
+  try {
+    await resendInvite({
+      slug: invite.slug,
+      contactName: invite.contactName,
+      companyName: invite.companyName,
+      email: invite.email,
+    })
+
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit({
+      action: 'INVITE_RESENT',
+      userId: (await requireRole('SUPER_ADMIN')).id,
+      resource: 'Invite',
+      resourceId: invite.id,
+    })
+  } catch (err) {
+    console.error('[invites] resendInvite failed:', err)
   }
 }
 

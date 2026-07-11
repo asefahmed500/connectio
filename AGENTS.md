@@ -1,5 +1,7 @@
 # ClientConnect — Agent Instructions
 
+> **Trust hierarchy when sources conflict:** code > this file > `docs/` > `prd.md`. **`README.md` is stale** — it claims "NextAuth 5" (actually a custom `jose`-based JWT auth) and lists wrong test accounts (`admin@connectio.test`). Use the test accounts below, not README's.
+
 ## Commands
 
 | What | Command |
@@ -71,7 +73,7 @@ Refresh: `POST /api/auth/refresh` — CSRF-protected (Origin check), rate-limite
 
 ## Notifications
 
-37 `NotificationType` enum values in Prisma schema. Adding a new event requires updating 4 files: `prisma/schema.prisma` (enum), `lib/notifications/types.ts` (discriminated union), `lib/notifications/audience.ts` (recipients), `lib/notifications/templates.ts` (render).
+A large `NotificationType` enum in the Prisma schema. Adding a new event requires updating 4 files: `prisma/schema.prisma` (enum), `lib/notifications/types.ts` (discriminated union), `lib/notifications/audience.ts` (recipients), `lib/notifications/templates.ts` (render). (Don't trust the count in CLAUDE.md — it's stale; check the enum directly.)
 
 Transport: SSE at `/api/notifications/stream` (GET, polls DB every 8s, re-auths each cycle — blocks/rejects close the stream). Falls back to HTTP polling in dev. Bell component: `useNotifications(enabled)` hook in `hooks/use-notifications.ts`.
 

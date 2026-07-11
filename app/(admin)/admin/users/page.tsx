@@ -15,8 +15,8 @@ import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
 import { ExportCsvButton } from '@/components/admin/export-csv-button'
 import { bulkBlockAction, bulkDeleteAction } from './actions'
-import { SelectAllCheckbox } from './bulk-actions'
-import { Ban, Trash2 } from 'lucide-react'
+import { SelectAllCheckbox, DeleteButton } from './bulk-actions'
+import { Ban } from 'lucide-react'
 
 export const metadata = { title: 'Users — ClientConnect' }
 
@@ -34,13 +34,15 @@ export default async function UsersPage({
   const params = await searchParams
   const page = params.page ? parseInt(params.page, 10) : 1
   const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : 20
+  const roleFilter = params.role && params.role !== 'all' ? params.role : undefined
+  const statusFilter = params.status && params.status !== 'all' ? params.status : undefined
 
   const result = await listUsers({
     page,
     pageSize,
     search: params.search,
-    role: params.role,
-    status: params.status,
+    role: roleFilter,
+    status: statusFilter,
   })
 
   function link(q: Record<string, string>) {
@@ -69,7 +71,7 @@ export default async function UsersPage({
                 <SelectValue placeholder="All roles" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All roles</SelectItem>
+                <SelectItem value="all">All roles</SelectItem>
                 <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                 <SelectItem value="TEAM_MEMBER">Team Member</SelectItem>
                 <SelectItem value="CLIENT">Client</SelectItem>
@@ -80,7 +82,7 @@ export default async function UsersPage({
                 <SelectValue placeholder="All status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="blocked">Blocked</SelectItem>
               </SelectContent>
@@ -100,7 +102,7 @@ export default async function UsersPage({
                 { key: 'name', label: 'Name' },
                 { key: 'email', label: 'Email' },
                 { key: 'role', label: 'Role' },
-                { key: 'isActive', label: 'Active', format: (v) => v ? 'Yes' : 'No' },
+                { key: 'isActive', label: 'Active', format: 'boolean' },
               ]}
             />
           </div>
@@ -126,17 +128,7 @@ export default async function UsersPage({
                 <Ban className="w-3 h-3" />
                 Block / Unblock
               </button>
-              <button
-                type="submit"
-                formAction={bulkDeleteAction}
-                className="inline-flex h-8 items-center justify-center rounded-lg border border-destructive px-3 text-xs font-medium text-destructive hover:bg-destructive/10 gap-1"
-                onClick={(e) => {
-                  if (!confirm('Delete selected users? This cannot be undone.')) e.preventDefault()
-                }}
-              >
-                <Trash2 className="w-3 h-3" />
-                Delete
-              </button>
+              <DeleteButton formAction={bulkDeleteAction} />
             </div>
           </div>
 

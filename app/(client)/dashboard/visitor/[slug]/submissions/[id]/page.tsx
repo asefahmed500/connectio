@@ -3,7 +3,8 @@ import { requireClientAccessBySlug } from '@/lib/dal/session'
 import { getSubmissionDTO } from '@/lib/dal/submissions'
 import { getFormForSubmission } from '@/lib/dal/forms'
 import { parseFormSchema } from '@/lib/forms/schema'
-import { SubmissionForm } from './submission-form'
+import { SubmissionForm } from '@/components/forms/submission-form'
+import { saveDraftAction, submitAction } from './actions'
 
 export const metadata = { title: 'Submission — ClientConnect' }
 
@@ -45,6 +46,8 @@ export default async function SubmissionPage({
         initialData={sub.formData}
         canEdit={canEdit}
         status={sub.status}
+        onSaveDraft={saveDraftAction}
+        onSubmitAction={submitAction}
       />
     </div>
   )

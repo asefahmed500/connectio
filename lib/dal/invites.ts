@@ -99,6 +99,52 @@ export async function listInvites(
   return toPaginated(rows, total, params)
 }
 
+export type CreateInviteInput = {
+  email: string
+  companyName: string
+  contactName: string
+}
+
+export async function createInvite(
+  input: CreateInviteInput & { createdBy: string }
+): Promise<{ id: string; slug: string }> {
+  const slug = await proposeSlug(input)
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+
+  const invite = await prisma.invite.create({
+    data: {
+      email: input.email.toLowerCase(),
+      companyName: input.companyName,
+      contactName: input.contactName,
+      slug,
+      createdBy: input.createdBy,
+      expiresAt,
+    },
+  })
+
+  return { id: invite.id, slug: invite.slug }
+}
+
+export async function resendInvite(invite: {
+  slug: string
+  contactName: string
+  companyName: string
+  email: string
+}): Promise<void> {
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const inviteUrl = `${base}/invite/${invite.slug}`
+
+  const { renderInviteEmail } = await import('@/lib/email-templates')
+  const tpl = await renderInviteEmail({
+    contactName: invite.contactName,
+    companyName: invite.companyName,
+    inviteUrl,
+  })
+
+  const { sendEmail } = await import('@/lib/email')
+  await sendEmail({ to: invite.email, subject: tpl.subject, text: tpl.text, html: tpl.html })
+}
+
 export async function getInviteForRegistration(
   slug: string,
 ): Promise<InviteForRegistration | null> {
