@@ -3,11 +3,11 @@ import { Download, Key, Trash2, User as UserIcon, ShieldCheck } from 'lucide-rea
 import { requireClientAccessBySlug, getCurrentUser } from '@/lib/dal/session'
 import { getTwoFactorStatus } from '@/lib/dal/two-factor'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { changePasswordAction, requestErasureAction } from './actions'
+import { requestErasureAction } from './actions'
 import { TwoFactorSettings } from './two-factor-settings'
+import { ChangePasswordForm } from './change-password-form'
 
 export const metadata = { title: 'Profile — ClientConnect' }
 
@@ -60,42 +60,7 @@ export default async function ProfilePage({
           <CardDescription>Update your password. Must be at least 8 characters.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form
-            action={async (fd: FormData) => { await changePasswordAction(slug, null, fd) }}
-            className="flex flex-col gap-4 max-w-sm"
-          >
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="currentPassword">Current password</Label>
-              <Input
-                id="currentPassword"
-                name="currentPassword"
-                type="password"
-                autoComplete="current-password"
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="newPassword">New password</Label>
-              <Input
-                id="newPassword"
-                name="newPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="confirmPassword">Confirm new password</Label>
-              <Input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-              />
-            </div>
-            <Button type="submit" className="self-start">Change password</Button>
-          </form>
+          <ChangePasswordForm slug={slug} />
         </CardContent>
       </Card>
 

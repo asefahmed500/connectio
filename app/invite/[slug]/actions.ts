@@ -1,7 +1,6 @@
 'use server'
 
 import { z } from 'zod'
-import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
@@ -29,6 +28,7 @@ export type RegisterState =
   | undefined
   | { error: string }
   | { fields?: RegisterFieldErrors; error?: undefined }
+  | { success: true; email: string; password: string }
 
 // Sentinel errors thrown from inside the transaction. Caught and mapped to
 // user-facing RegisterState below. (Throwing strings here is intentional — we
@@ -152,8 +152,5 @@ export async function registerAction(
     companyName: user.client!.companyName,
   })
 
-  // REVIEW.md §3.4 (role-change propagation): a freshly registered user starts
-  // at tokenVersion=0; if their role ever changes, getCurrentUser() rejects
-  // their old JWT on the next request.
-  redirect(`/dashboard/visitor/${user.client!.uniqueSlug}`)
+  return { success: true, email: normalizedEmail, password }
 }
