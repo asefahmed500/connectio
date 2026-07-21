@@ -8,9 +8,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
 import { Search } from 'lucide-react'
 import { Separator } from '@/components/ui/separator'
+import { Pagination } from '@/components/shared/pagination'
 import { listEmailLogs, getDistinctEmailCategories } from '@/lib/dal/email-logs'
 
 export const metadata = { title: 'Email logs — ClientConnect' }
@@ -63,7 +63,7 @@ export default async function EmailLogsPage({
             <div className="flex-1 min-w-0">
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input name="search" defaultValue={params.search ?? ''} placeholder="Search recipient or subject…" className="pl-8" />
+                <Input name="search" defaultValue={params.search ?? ''} placeholder="Search recipient or subject…" className="pl-8" aria-label="Search email logs" />
               </div>
             </div>
             <Select name="category" defaultValue={params.category ?? ''}>
@@ -109,6 +109,7 @@ export default async function EmailLogsPage({
         </Card>
       ) : (
         <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -142,29 +143,19 @@ export default async function EmailLogsPage({
               ))}
             </TableBody>
           </Table>
+          </div>
 
           {result.totalPages > 1 && (
             <>
               <Separator />
-              <div className="flex items-center justify-between pt-4">
-                <span className="text-xs text-muted-foreground">
-                  Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, result.total)} of {result.total}
-                </span>
-                <div className="flex gap-2">
-                  <Link
-                    href={link({ ...params, page: String(page - 1), pageSize: String(pageSize) })}
-                    className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page <= 1 ? "pointer-events-none opacity-50" : "hover:bg-muted")}
-                  >
-                    Previous
-                  </Link>
-                  <Link
-                    href={link({ ...params, page: String(page + 1), pageSize: String(pageSize) })}
-                    className={cn("inline-flex h-8 items-center justify-center rounded-lg border px-3 text-xs font-medium", page >= result.totalPages ? "pointer-events-none opacity-50" : "hover:bg-muted")}
-                  >
-                    Next
-                  </Link>
-                </div>
-              </div>
+              <Pagination
+                page={page}
+                pageSize={pageSize}
+                total={result.total}
+                totalPages={result.totalPages}
+                buildHref={link}
+                currentParams={params}
+              />
             </>
           )}
         </div>

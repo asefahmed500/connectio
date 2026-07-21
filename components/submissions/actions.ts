@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { getCurrentUser } from '@/lib/dal/session'
 import { updateStatus } from '@/lib/dal/submissions'
 import type { SubmissionStatus } from '@prisma/client'
 
@@ -20,6 +21,6 @@ export async function updateSubmissionStatusAction(
     await updateStatus({ submissionId, next })
   } catch (err) {
     console.error('[submissions] updateSubmissionStatusAction failed:', err)
-    return { error: err instanceof Error ? err.message : 'Something went wrong.' }
+    return { error: 'Could not update submission status. Try again.' }
   }
 }

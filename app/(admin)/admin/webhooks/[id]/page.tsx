@@ -23,7 +23,7 @@ export default async function EditWebhookPage({
   const { items: deliveries } = await listWebhookDeliveries(id, 1, 50)
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6">
       <div>
         <Link href="/admin/webhooks" className="text-sm text-muted-foreground hover:text-foreground">
           &larr; Webhooks

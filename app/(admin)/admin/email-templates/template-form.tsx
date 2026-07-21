@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useFormStatus } from 'react-dom'
 import { saveEmailTemplateAction } from './actions'
 import { Button } from '@/components/ui/button'
@@ -22,9 +23,15 @@ function SubmitButton() {
 }
 
 export function EmailTemplateForm({ mode, template }: Props) {
-  const formAction = mode === 'create'
-    ? async (fd: FormData) => { await saveEmailTemplateAction(null, fd) }
-    : async (fd: FormData) => { await saveEmailTemplateAction(null, fd) }
+  // Both branches now correctly thread the template id (if any) through to
+  // the action so edits UPDATE instead of CREATE-ing a duplicate.
+  const formAction = async (fd: FormData) => {
+    if (mode === 'edit' && template) {
+      await saveEmailTemplateAction(template.id, null, fd)
+    } else {
+      await saveEmailTemplateAction(null, null, fd)
+    }
+  }
 
   return (
     <form action={formAction} noValidate>
@@ -145,12 +152,9 @@ export function EmailTemplateForm({ mode, template }: Props) {
 
         <div className="flex items-center gap-2">
           <SubmitButton />
-          <a
-            href="/admin/email-templates"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
-            Cancel
-          </a>
+          <Button asChild variant="outline">
+            <Link href="/admin/email-templates">Cancel</Link>
+          </Button>
         </div>
       </div>
     </form>

@@ -1,12 +1,13 @@
 import 'server-only'
 import { cache } from 'react'
 import { prisma } from '@/lib/db'
-import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { requireRole, requireClientAccess, getCurrentUser } from '@/lib/dal/session'
 import { requirePermission } from '@/lib/auth/permissions'
 import { FormSchemaV1, parseFormSchema } from '@/lib/forms/schema'
 import { PaginationParams, PaginatedResult, paginationParams, toPaginated } from '@/lib/dal/pagination'
 import { NotFoundError } from '@/lib/errors'
 import type { Prisma } from '@prisma/client'
+import { proposeSlug } from '@/lib/dal/invites'
 
 export type FormSummary = {
   id: string
@@ -192,4 +193,119 @@ export async function getFormForSubmission(formId: string): Promise<{
     isActive: boolean
     formSchema: object
   } | null>
+}
+
+export type SendFormResult = {
+  userId: string
+  userName: string
+  clientId: string
+  slug: string
+  submissionId: string
+}
+
+/**
+ * Sends a form to one or more users. For each user:
+ * 1. Ensures they have a Client record (creates one if needed)
+ * 2. Ensures a draft submission exists
+ * 3. Fires a FORM_ASSIGNED notification
+ */
+export async function sendFormToUsers(
+  formId: string,
+  userIds: string[],
+): Promise<SendFormResult[]> {
+  const admin = await requirePermission('form:update')
+
+  const form = await prisma.form.findFirst({
+    where: { id: formId, deletedAt: null },
+    select: { id: true, title: true },
+  })
+  if (!form) throw new NotFoundError('Form')
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: userIds }, deletedAt: null },
+    include: { client: true },
+  })
+
+  const results: SendFormResult[] = []
+
+  // Wrap the per-recipient loop in a single transaction so a mid-loop DB
+  // failure rolls back EVERYTHING (no partial recipients get a form while
+  // others don't). Audit + notify fire after the tx commits.
+  const recipients: Array<{
+    user: (typeof users)[number]
+    client: NonNullable<(typeof users)[number]['client']> | { id: string; uniqueSlug: string }
+    draftId: string
+  }> = []
+
+  await prisma.$transaction(async (tx) => {
+    for (const user of users) {
+      let client = user.client
+        ? { id: user.client.id, uniqueSlug: user.client.uniqueSlug }
+        : null
+      if (!client) {
+        const slug = await proposeSlug({
+          contactName: user.name,
+          companyName: user.name,
+        })
+        const created = await tx.client.create({
+          data: {
+            userId: user.id,
+            companyName: user.name,
+            contactName: user.name,
+            uniqueSlug: slug,
+          },
+          select: { id: true, uniqueSlug: true },
+        })
+        client = { id: created.id, uniqueSlug: created.uniqueSlug }
+      }
+
+      // Ensure a draft submission exists within this tx.
+      const existing = await tx.submission.findFirst({
+        where: { clientId: client.id, formId: form.id, deletedAt: null },
+        select: { id: true },
+      })
+      let draftId: string
+      if (existing) {
+        draftId = existing.id
+      } else {
+        const created = await tx.submission.create({
+          data: {
+            clientId: client.id,
+            formId: form.id,
+            formData: {},
+            status: 'DRAFT',
+          },
+          select: { id: true },
+        })
+        draftId = created.id
+      }
+
+      recipients.push({ user, client, draftId })
+    }
+  })
+
+  // Side-effects OUTSIDE the tx, per AGENTS.md convention.
+  const { notify } = await import('@/lib/notifications/notify')
+  for (const { user, client, draftId } of recipients) {
+    // Correct action label: this is an assignment, not a schema edit.
+    await writeAuditShim('FORM_ASSIGNED', admin.id, 'Form', form.id)
+    await notify({
+      type: 'FORM_ASSIGNED',
+      actorId: admin.id,
+      targetUserId: user.id,
+      formId: form.id,
+      formTitle: form.title,
+      clientSlug: client.uniqueSlug,
+    })
+
+    results.push({
+      userId: user.id,
+      userName: user.name,
+      clientId: client.id,
+      slug: client.uniqueSlug,
+      submissionId: draftId,
+    })
+  }
+
+  return results
 }

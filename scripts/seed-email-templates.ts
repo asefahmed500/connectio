@@ -38,11 +38,11 @@ const TEMPLATES: Array<{
     key: 'password_reset',
     name: 'Password reset email',
     category: 'security',
-    subject: 'Reset your ClientConnect password',
+    subject: 'Your password reset code',
     textBody:
-      'Click this link to reset your password:\n\n{{resetUrl}}\n\nThis link expires in 1 hour. If you didn\'t request this, ignore this email.',
+      'Your password reset code is:\n\n{{otp}}\n\nEnter this code on the password reset page to set a new password. This code expires in 10 minutes.\n\nIf you didn\'t request this, ignore this email.',
     htmlBody: null,
-    variables: 'resetUrl',
+    variables: 'otp, appUrl',
   },
   {
     key: 'notification',

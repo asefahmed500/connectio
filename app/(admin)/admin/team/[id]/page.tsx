@@ -19,7 +19,7 @@ export default async function TeamMemberDetailPage({
   const unassigned = await listUnassignedClients(id)
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6">
       <div>
         <Link href="/admin/team" className="text-sm text-muted-foreground hover:text-foreground">
           ← All team members

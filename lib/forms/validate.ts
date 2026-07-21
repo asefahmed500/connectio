@@ -45,6 +45,18 @@ function fieldToZod(f: FieldSchema): z.ZodTypeAny {
     case 'url':
       s = z.url()
       break
+    case 'date':
+      s = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Enter a valid date (YYYY-MM-DD)')
+      break
+    case 'datetime':
+      s = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/, 'Enter a valid date and time')
+      break
+    case 'file':
+      s = z.string().min(1, 'File is required')
+      break
+    case 'heading':
+      s = z.literal('').optional()
+      break
     case 'select':
     case 'radio': {
       const values = f.options!.map((o) => o.value) as [string, ...string[]]

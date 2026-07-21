@@ -23,5 +23,6 @@ export async function saveClientSettingsAction(clientId: string, prev: unknown, 
 export async function resetClientSettingsAction(clientId: string) {
   const { deleteClientSettings } = await import('@/lib/dal/client-settings')
   await deleteClientSettings(clientId)
+  revalidatePath(`/admin/clients/${clientId}`)
   revalidatePath(`/admin/clients/${clientId}/branding`)
 }

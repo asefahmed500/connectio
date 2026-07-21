@@ -1,25 +1,36 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { generateRefreshToken, hashRefreshToken } from '@/lib/auth/tokens'
+import { hashRefreshToken, signResetToken } from '@/lib/auth/tokens'
 import { hashPassword } from '@/lib/auth/password'
 import { writeAudit } from '@/lib/audit'
+import { rateLimit, rateLimitAll } from '@/lib/ratelimit'
 
-const RESET_TOKEN_TTL_MS = 60 * 60 * 1000 // 1 hour
+const RESET_TOKEN_TTL_MS = 10 * 60 * 1000 // 10 minutes for OTP validity
 
-export async function createPasswordResetToken(email: string): Promise<string | null> {
+function generateOtp(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(4))
+  const num = (bytes[0] << 24 | bytes[1] << 16 | bytes[2] << 8 | bytes[3]) >>> 0
+  return String(100000 + (num % 900000))
+}
+
+export async function createPasswordResetOtp(email: string): Promise<{
+  rawOtp: string
+  userExists: boolean
+}> {
   const user = await prisma.user.findUnique({
     where: { email: email.toLowerCase() },
     select: { id: true },
   })
-  if (!user) return null
 
-  // Delete any existing unused tokens for this user — one active reset at a time.
+  if (!user) return { rawOtp: '', userExists: false }
+
+  // Delete any existing unused tokens for this user.
   await prisma.passwordResetToken.deleteMany({
     where: { userId: user.id, usedAt: null },
   })
 
-  const token = generateRefreshToken()
-  const tokenHash = await hashRefreshToken(token)
+  const otp = generateOtp()
+  const tokenHash = await hashRefreshToken(otp)
 
   await prisma.passwordResetToken.create({
     data: {
@@ -36,28 +47,73 @@ export async function createPasswordResetToken(email: string): Promise<string | 
     resourceId: tokenHash.slice(0, 8),
   })
 
-  return token
+  return { rawOtp: otp, userExists: true }
 }
 
-export async function resetPassword(opts: {
-  token: string
-  newPassword: string
-}): Promise<{ ok: boolean; error?: string }> {
-  const tokenHash = await hashRefreshToken(opts.token)
+export async function verifyResetOtp(email: string, otp: string): Promise<{
+  ok: boolean
+  error?: string
+  resetTokenCookie?: string
+}> {
+  const rl = await rateLimitAll(
+    rateLimit(`reset-otp:${email.toLowerCase()}`, { limit: 5, window: 60 }),
+  )
+  if (!rl.ok) {
+    return { ok: false, error: 'Too many attempts. Please wait a minute.' }
+  }
 
-  const record = await prisma.passwordResetToken.findUnique({
-    where: { tokenHash },
-    include: { user: { select: { id: true, tokenVersion: true } } },
+  const user = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    select: { id: true },
+  })
+  if (!user) return { ok: false, error: 'Invalid or expired verification code.' }
+
+  const tokenHash = await hashRefreshToken(otp)
+
+  const record = await prisma.passwordResetToken.findFirst({
+    where: { userId: user.id, tokenHash, usedAt: null },
+    select: { id: true, expiresAt: true },
   })
 
-  if (!record) return { ok: false, error: 'Invalid or expired reset link.' }
-  if (record.usedAt) return { ok: false, error: 'This reset link has already been used.' }
+  if (!record) return { ok: false, error: 'Invalid or expired verification code.' }
   if (record.expiresAt < new Date()) {
     await prisma.passwordResetToken.update({
       where: { id: record.id },
       data: { usedAt: new Date() },
     })
-    return { ok: false, error: 'This reset link has expired.' }
+    return { ok: false, error: 'This verification code has expired. Request a new one.' }
+  }
+
+  const resetTokenCookie = await signResetToken(record.id)
+  return { ok: true, resetTokenCookie }
+}
+
+export async function resetPassword(opts: {
+  newPassword: string
+}): Promise<{ ok: boolean; error?: string }> {
+  const { verifyResetTokenCookie } = await import('@/lib/auth/tokens')
+  const { cookies } = await import('next/headers')
+  const cookieStore = await cookies()
+  const resetToken = cookieStore.get('reset_token')?.value
+
+  const verified = await verifyResetTokenCookie(resetToken)
+  if (!verified.ok) {
+    return { ok: false, error: 'Session expired. Please start over.' }
+  }
+
+  const record = await prisma.passwordResetToken.findUnique({
+    where: { id: verified.claims!.pwdResetId },
+    include: { user: { select: { id: true, tokenVersion: true } } },
+  })
+
+  if (!record) return { ok: false, error: 'Invalid or expired reset session.' }
+  if (record.usedAt) return { ok: false, error: 'This reset has already been used.' }
+  if (record.expiresAt < new Date()) {
+    await prisma.passwordResetToken.update({
+      where: { id: record.id },
+      data: { usedAt: new Date() },
+    })
+    return { ok: false, error: 'This reset has expired. Request a new code.' }
   }
 
   const passwordHash = await hashPassword(opts.newPassword)
@@ -67,19 +123,21 @@ export async function resetPassword(opts: {
       where: { id: record.user.id },
       data: {
         passwordHash,
-        tokenVersion: record.user.tokenVersion + 1, // Invalidate all existing sessions
+        tokenVersion: record.user.tokenVersion + 1,
       },
     }),
     prisma.passwordResetToken.update({
       where: { id: record.id },
       data: { usedAt: new Date() },
     }),
-    // Revoke all sessions for security
     prisma.session.updateMany({
       where: { userId: record.user.id, revokedAt: null },
       data: { revokedAt: new Date() },
     }),
   ])
+
+  // Clear the reset cookie
+  cookieStore.set('reset_token', '', { maxAge: 0, path: '/' })
 
   await writeAudit({
     action: 'PASSWORD_RESET_COMPLETED',
@@ -89,15 +147,4 @@ export async function resetPassword(opts: {
   })
 
   return { ok: true }
-}
-
-export async function verifyResetToken(token: string): Promise<boolean> {
-  const tokenHash = await hashRefreshToken(token)
-  const record = await prisma.passwordResetToken.findUnique({
-    where: { tokenHash },
-    select: { usedAt: true, expiresAt: true },
-  })
-  if (!record || record.usedAt) return false
-  if (record.expiresAt < new Date()) return false
-  return true
 }

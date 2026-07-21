@@ -68,6 +68,9 @@ export function ClientShell({
 }) {
   const pathname = usePathname()
 
+  // brandColor is sanitized by the DAL (lib/dal/client-settings.ts) on both
+  // write and read, so it's already a validated #hex or oklch()/rgb() value
+  // by the time it reaches this client component.
   const brandColor = settings?.brandColor ?? '#0EA5E9'
   const portalTitle = settings?.portalTitle || 'CLIENTCONNECT'
   const shortTitle = portalTitle.slice(0, 2).toUpperCase()
@@ -148,7 +151,7 @@ export function ClientShell({
         </Sidebar>
         <SidebarInset>
           <ClientHeader />
-          <main className="flex-1 p-8 overflow-x-auto">{children}</main>
+          <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-auto">{children}</main>
         </SidebarInset>
       </SidebarProvider>
     </>

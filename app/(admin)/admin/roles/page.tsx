@@ -19,10 +19,13 @@ const ROLE_LABELS: Record<UserRole, string> = {
   CLIENT: 'Client',
 }
 
-const ROLE_COLORS: Record<UserRole, string> = {
-  SUPER_ADMIN: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  TEAM_MEMBER: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  CLIENT: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200',
+// Semantic Badge variants per role — primary (admin) / secondary (team) / outline (client).
+// Avoids hardcoded color classes and `dark:` overrides (AGENTS.md forbids `dark:` in app code).
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'ghost' | 'link'
+const ROLE_VARIANT: Record<UserRole, BadgeVariant> = {
+  SUPER_ADMIN: 'default',
+  TEAM_MEMBER: 'secondary',
+  CLIENT: 'outline',
 }
 
 export default async function AdminRolesPage() {
@@ -32,17 +35,17 @@ export default async function AdminRolesPage() {
   const domainEntries = Object.entries(domains).sort(([a], [b]) => a.localeCompare(b))
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-heading tracking-wide">Roles & permissions</h1>
         <p className="text-sm text-muted-foreground">
-          Permission matrix across all roles. Custom role assignment coming soon.
+          Permission matrix across all roles. Each role inherits the permissions listed below.
         </p>
       </div>
 
       <div className="flex items-center gap-3">
         {ROLES.map((role) => (
-          <Badge key={role} className={ROLE_COLORS[role]}>
+          <Badge key={role} variant={ROLE_VARIANT[role]}>
             {ROLE_LABELS[role]}
           </Badge>
         ))}

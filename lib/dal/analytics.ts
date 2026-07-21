@@ -1,7 +1,28 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
-import { requireRole } from '@/lib/dal/session'
+import { requireRole, requireClientAccess } from '@/lib/dal/session'
+import { forbidden } from 'next/navigation'
 import type { SubmissionStatus } from '@prisma/client'
+
+/**
+ * Resolve the teamMemberId the caller MAY pass into the actual id of the
+ * current user's TeamMember row.
+ *
+ * SUPER_ADMIN may pass any id (e.g. when inspecting another team's dashboard).
+ * TEAM_MEMBER callers MUST pass their own id — passing anyone else's is an
+ * IDOR attempt and we reject it with 403.
+ *
+ * This closes the analytics IDOR (a TEAM_MEMBER could previously read any
+ * team's dashboard, submission trend, status breakdown, and recent activity
+ * by passing another member's id) without changing any caller signature.
+ */
+async function resolveTeamMemberId(passedId: string): Promise<string> {
+  const user = await requireRole('SUPER_ADMIN', 'TEAM_MEMBER')
+  if (user.role === 'SUPER_ADMIN') return passedId
+  // TEAM_MEMBER: the caller's teamMember.id is the only allowed value.
+  if (!user.teamMember || user.teamMember.id !== passedId) forbidden()
+  return user.teamMember!.id
+}
 
 export type SystemOverview = {
   totalUsers: number
@@ -267,7 +288,8 @@ export type TeamDashboardStats = {
 }
 
 export async function getTeamDashboardStats(teamMemberId: string): Promise<TeamDashboardStats> {
-  const clientIds = await getTeamClientIds(teamMemberId)
+  const resolvedTeamMemberId = await resolveTeamMemberId(teamMemberId)
+  const clientIds = await getTeamClientIds(resolvedTeamMemberId)
 
   const [
     totalSubmissions,
@@ -305,7 +327,8 @@ export async function getTeamSubmissionTrend(
   teamMemberId: string,
   days = 14,
 ): Promise<DayBucket[]> {
-  const clientIds = await getTeamClientIds(teamMemberId)
+  const resolvedTeamMemberId = await resolveTeamMemberId(teamMemberId)
+  const clientIds = await getTeamClientIds(resolvedTeamMemberId)
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
 
   const submissions = await prisma.submission.findMany({
@@ -317,7 +340,8 @@ export async function getTeamSubmissionTrend(
 }
 
 export async function getTeamStatusBreakdown(teamMemberId: string): Promise<StatusBreakdown> {
-  const clientIds = await getTeamClientIds(teamMemberId)
+  const resolvedTeamMemberId = await resolveTeamMemberId(teamMemberId)
+  const clientIds = await getTeamClientIds(resolvedTeamMemberId)
   const grouped = await prisma.submission.groupBy({
     by: ['status'],
     where: { clientId: { in: clientIds }, deletedAt: null },
@@ -333,7 +357,8 @@ export async function getTeamRecentActivity(
   teamMemberId: string,
   limit = 15,
 ): Promise<ActivityItem[]> {
-  const clientIds = await getTeamClientIds(teamMemberId)
+  const resolvedTeamMemberId = await resolveTeamMemberId(teamMemberId)
+  const clientIds = await getTeamClientIds(resolvedTeamMemberId)
 
   const subLimit = Math.floor(limit / 2)
   const commentLimit = Math.floor(limit / 3)
@@ -381,6 +406,7 @@ export type ClientDashboardStats = {
 }
 
 export async function getClientDashboardStats(clientId: string): Promise<ClientDashboardStats> {
+  await requireClientAccess(clientId)
   const [totalSubmissions, totalComments, totalFiles, pendingReview] = await Promise.all([
     prisma.submission.count({ where: { clientId, deletedAt: null } }),
     prisma.comment.count({ where: { clientId, deletedAt: null } }),
@@ -396,6 +422,7 @@ export async function getClientSubmissionTrend(
   clientId: string,
   months = 12,
 ): Promise<DayBucket[]> {
+  await requireClientAccess(clientId)
   const since = new Date()
   since.setMonth(since.getMonth() - months)
 
@@ -408,6 +435,7 @@ export async function getClientSubmissionTrend(
 }
 
 export async function getClientStatusBreakdown(clientId: string): Promise<StatusBreakdown> {
+  await requireClientAccess(clientId)
   const grouped = await prisma.submission.groupBy({
     by: ['status'],
     where: { clientId, deletedAt: null },
@@ -423,6 +451,7 @@ export async function getClientRecentActivity(
   clientId: string,
   limit = 10,
 ): Promise<ActivityItem[]> {
+  await requireClientAccess(clientId)
   const subLimit = Math.floor(limit / 2)
   const commentLimit = Math.floor(limit / 3)
   const fileLimit = Math.max(1, limit - subLimit - commentLimit)

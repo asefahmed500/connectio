@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/dal/session'
+import { checkSameOrigin } from '@/lib/auth/csrf'
 import { listNotifications, searchNotifications, deleteAllNotifications } from '@/lib/dal/notifications'
 
 export const runtime = 'nodejs'
@@ -25,7 +26,10 @@ export async function GET(req: Request) {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(req: Request) {
+  if (!checkSameOrigin(req.headers)) {
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 })
+  }
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

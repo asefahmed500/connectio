@@ -1,7 +1,28 @@
 import 'server-only'
+import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
+import { SCIM_ALLOWED_ROLES } from '@/lib/dal/sso'
 import type { Prisma, UserRole } from '@prisma/client'
+
+/**
+ * Asserts that `role` is in the SCIM/SSO allowlist. Privileged roles
+ * (SUPER_ADMIN) must never be minted via federated identity.
+ * Throws on disallowed roles — the route maps this to a 400.
+ */
+export function assertScimRole(role: unknown): UserRole {
+  if (typeof role === 'string' && (SCIM_ALLOWED_ROLES as readonly string[]).includes(role)) {
+    return role as UserRole
+  }
+  throw new ScimValidationError(`SCIM cannot assign role '${String(role)}'. Allowed: ${SCIM_ALLOWED_ROLES.join(', ')}`)
+}
+
+export class ScimValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ScimValidationError'
+  }
+}
 
 // SCIM DAL functions intentionally have no inline auth guards — authentication
 // is enforced at the API route level via verifyScimApiKey() (SHA-256 bearer
@@ -108,7 +129,7 @@ export async function scimCreateUser(input: {
       email,
       name: [input.givenName, input.familyName].filter(Boolean).join(' ') || email,
       passwordHash,
-      role: input.role ?? 'TEAM_MEMBER',
+      role: input.role ? assertScimRole(input.role) : 'TEAM_MEMBER',
       isActive: input.active ?? true,
     },
   })
@@ -135,7 +156,7 @@ export async function scimUpdateUser(
     }
   }
   if (input.active !== undefined) data.isActive = input.active
-  if (input.role) data.role = input.role
+  if (input.role) data.role = assertScimRole(input.role)
 
   if (Object.keys(data).length === 0) return scimGetUser(id)
 
@@ -289,10 +310,7 @@ function toScimUser(u: {
 }
 
 function generateTempPassword(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$'
-  let result = ''
-  for (let i = 0; i < 24; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
+  // Cryptographically secure temporary password (JIT-provisioned users must
+  // change it on first login anyway, but use crypto RNG to avoid predictability).
+  return randomBytes(18).toString('base64url')
 }

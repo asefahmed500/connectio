@@ -21,12 +21,36 @@ export function renderTemplate(
   context: { clientSlug?: string } = {},
 ): Template {
   switch (event.type) {
+    case 'INVITE_CREATED':
+      return {
+        title: 'Invite created',
+        body: `An invite link was generated for ${event.companyName} (${event.contactName}).`,
+        href: '/admin/invites',
+        emailByDefault: false,
+      }
+
     case 'INVITE_CONSUMED':
       return {
         title: 'Invite accepted',
         body: `${event.companyName} accepted their invite and registered.`,
         href: clientHref(event.clientId),
         emailByDefault: true,
+      }
+
+    case 'INVITE_EXPIRED':
+      return {
+        title: 'Invite expired',
+        body: `The invite for ${event.companyName} expired before being used.`,
+        href: '/admin/invites',
+        emailByDefault: false,
+      }
+
+    case 'SUBMISSION_DRAFTED':
+      return {
+        title: 'Draft saved',
+        body: `Draft of ${event.formTitle} was saved.`,
+        href: clientHref(event.clientId),
+        emailByDefault: false,
       }
 
     case 'SUBMISSION_SUBMITTED':
@@ -221,6 +245,82 @@ export function renderTemplate(
         title: 'Audit chain integrity alert',
         body: `${event.brokenCount} audit log entr${event.brokenCount === 1 ? 'y has' : 'ies have'} been tampered with. Immediate investigation required.`,
         href: '/admin/audit-log',
+        emailByDefault: true,
+      }
+
+    case 'SYSTEM_ERROR':
+      return {
+        title: 'System error',
+        body: event.component
+          ? `[${event.component}] ${event.message}`
+          : event.message,
+        href: '/admin',
+        emailByDefault: true,
+      }
+
+    case 'SSO_PROVIDER_CREATED':
+      return {
+        title: 'SSO provider added',
+        body: `Identity provider "${event.providerName}" was configured.`,
+        href: '/admin/sso',
+        emailByDefault: false,
+      }
+
+    case 'SSO_PROVIDER_UPDATED':
+      return {
+        title: 'SSO provider updated',
+        body: `Identity provider "${event.providerName}" configuration was changed.`,
+        href: '/admin/sso',
+        emailByDefault: false,
+      }
+
+    case 'SSO_PROVIDER_DELETED':
+      return {
+        title: 'SSO provider removed',
+        body: `Identity provider "${event.providerName}" was deleted. Users linked to it will no longer be able to sign in via SSO.`,
+        href: '/admin/sso',
+        emailByDefault: true,
+      }
+
+    case 'SSO_LOGIN_SUCCESS':
+      return {
+        title: 'SSO sign-in',
+        body: `Signed in via ${event.providerName}.`,
+        href: '/login',
+        emailByDefault: false,
+      }
+
+    case 'SSO_LOGIN_FAILED':
+      return {
+        title: 'SSO sign-in failed',
+        body: `An attempt to sign in via ${event.providerName} failed: ${event.reason}`,
+        href: '/admin/audit-log',
+        emailByDefault: false,
+      }
+
+    case 'SCIM_USER_PROVISIONED':
+      return {
+        title: 'Account provisioned',
+        body: `Your account was provisioned automatically by ${event.providerName} via SCIM.`,
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'SCIM_USER_DEPROVISIONED':
+      return {
+        title: 'Account deactivated',
+        body: `Your account was deactivated by ${event.providerName} via SCIM. Contact your administrator if this is unexpected.`,
+        href: '/login',
+        emailByDefault: true,
+      }
+
+    case 'FORM_ASSIGNED':
+      return {
+        title: 'Form assigned to you',
+        body: `"${event.formTitle}" has been assigned to you. Click to fill it out.`,
+        href: event.clientSlug
+          ? `/dashboard/visitor/${event.clientSlug}/submissions/new?formId=${event.formId}`
+          : `/dashboard/visitor/submissions/new?formId=${event.formId}`,
         emailByDefault: true,
       }
   }

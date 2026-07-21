@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useChatPoll } from '@/hooks/use-chat-poll'
+import { Button } from '@/components/ui/button'
 import { CommentForm } from './comment-form'
 import { CommentList } from './comment-list'
 import type { CommentNode } from '@/lib/dal/comments'
@@ -19,6 +20,7 @@ export function LiveChat({
   const [viewerRole, setViewerRole] = useState<UserRole | null>(null)
   const [viewerId, setViewerId] = useState<string>('')
   const [initialLoading, setInitialLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
 
   const handleNewComment = useCallback((c: CommentNode) => {
     setLiveComments((prev) => {
@@ -42,31 +44,51 @@ export function LiveChat({
 
   useChatPoll(clientId, handleNewComment, submissionId)
 
-  useEffect(() => {
-    async function init() {
-      try {
-        const params = new URLSearchParams({ clientId })
-        if (submissionId) params.set('submissionId', submissionId)
+  // Initial load + session fetch. setState calls happen only after the awaited
+  // fetches, never synchronously in the effect body — keeps the
+  // `react-hooks/set-state-in-effect` rule happy.
+  const loadInitial = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ clientId })
+      if (submissionId) params.set('submissionId', submissionId)
 
-        const [commentsRes, sessionRes] = await Promise.all([
-          fetch(`/api/comments?${params}`, { credentials: 'same-origin' }),
-          fetch('/api/auth/session', { credentials: 'same-origin' }),
-        ])
+      const [commentsRes, sessionRes] = await Promise.all([
+        fetch(`/api/comments?${params}`, { credentials: 'same-origin' }),
+        fetch('/api/auth/session', { credentials: 'same-origin' }),
+      ])
 
-        if (commentsRes.ok) {
-          const data = (await commentsRes.json()) as CommentNode[]
-          setInitialComments(data)
-        }
-        if (sessionRes.ok) {
-          const session = await sessionRes.json()
-          setViewerRole(session.role as UserRole)
-          setViewerId(session.id)
-        }
-      } catch { /* ignore */ }
+      if (!commentsRes.ok || !sessionRes.ok) {
+        throw new Error('Network response was not ok')
+      }
+
+      const data = (await commentsRes.json()) as CommentNode[]
+      setInitialComments(data)
+      const session = await sessionRes.json()
+      setViewerRole(session.role as UserRole)
+      setViewerId(session.id)
+      setLoadError(false)
+    } catch (err) {
+      console.error('[live-chat] initial load failed:', err)
+      setLoadError(true)
+    } finally {
       setInitialLoading(false)
     }
-    init()
   }, [clientId, submissionId])
+
+  useEffect(() => {
+    // setState calls inside loadInitial all happen after the awaited fetches
+    // (in the .then/.catch/finally paths), so they cannot trigger a cascading
+    // render. The rule's static analysis can't see across the await.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadInitial()
+  }, [loadInitial])
+
+  // Retry handler lives in the render body, so its setState calls are NOT in
+  // an effect — the cascading-render rule doesn't apply.
+  const retry = () => {
+    setInitialLoading(true)
+    loadInitial()
+  }
 
   // De-duplicate: show initial comments, then append live ones
   const comments = (() => {
@@ -77,10 +99,22 @@ export function LiveChat({
 
   if (initialLoading) {
     return (
-      <div className="flex flex-col gap-2 py-6">
+      <div className="flex flex-col gap-2 py-6" role="status" aria-label="Loading messages">
         <div className="h-4 w-2/3 bg-muted rounded animate-pulse" />
         <div className="h-3 w-full bg-muted rounded animate-pulse" />
         <div className="h-3 w-1/2 bg-muted rounded animate-pulse" />
+      </div>
+    )
+  }
+  if (loadError) {
+    return (
+      <div className="py-6 text-center flex flex-col items-center gap-3">
+        <p className="text-sm text-muted-foreground" role="alert">
+          Couldn&apos;t load messages.
+        </p>
+        <Button variant="outline" size="sm" onClick={retry}>
+          Retry
+        </Button>
       </div>
     )
   }

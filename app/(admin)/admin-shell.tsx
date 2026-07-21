@@ -35,6 +35,8 @@ import {
   Scale,
   Fingerprint,
   Shield,
+  MonitorSmartphone,
+  MessageSquare,
 } from 'lucide-react'
 
 // Lazy-load the Cmd+K palette — it's only visible on keyboard shortcut
@@ -50,6 +52,8 @@ const NAV = [
   { href: '/admin/clients', label: 'Clients', icon: Building2 },
   { href: '/admin/forms', label: 'Forms', icon: FileText },
   { href: '/admin/team', label: 'Team', icon: UsersRound },
+  { href: '/admin/comments', label: 'Comments', icon: MessageSquare },
+  { href: '/admin/sessions', label: 'Sessions', icon: MonitorSmartphone },
   { href: '/admin/audit-log', label: 'Audit Log', icon: ScrollText },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell },
   { href: '/admin/audit-log/chain', label: 'Audit Chain', icon: ShieldCheck },
@@ -138,7 +142,7 @@ export function AdminShell({
       </Sidebar>
       <SidebarInset>
         <AdminHeader />
-        <main className="flex-1 p-8 overflow-x-auto">{children}</main>
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-x-auto">{children}</main>
         <CommandPalette />
       </SidebarInset>
     </SidebarProvider>

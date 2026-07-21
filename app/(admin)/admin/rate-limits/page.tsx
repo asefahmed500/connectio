@@ -64,7 +64,7 @@ const RULES = [
 
 export default function RateLimitsPage() {
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-heading tracking-wide">Rate limits</h1>
         <p className="text-sm text-muted-foreground">

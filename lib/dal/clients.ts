@@ -1,5 +1,6 @@
 import 'server-only'
 import { cache } from 'react'
+import { randomInt } from 'crypto'
 import { prisma } from '@/lib/db'
 import { requireClientAccess } from '@/lib/dal/session'
 import { requirePermission } from '@/lib/auth/permissions'
@@ -111,7 +112,7 @@ export const getClientDTO = cache(async (clientId: string): Promise<ClientDTO | 
 })
 
 function randomPick(arr: string): string {
-  return arr[Math.floor(Math.random() * arr.length)]
+  return arr[randomInt(0, arr.length)]
 }
 
 function generatePassword(): string {
@@ -127,7 +128,14 @@ function generatePassword(): string {
     randomPick(special),
   ]
   const rest = Array.from({ length: 10 }, () => randomPick(all))
-  return [...required, ...rest].sort(() => Math.random() - 0.5).join('')
+  // Stable shuffle via crypto RNG (Fisher–Yates-ish) so the password layout
+  // can't leak the PRNG state.
+  const combined = [...required, ...rest]
+  for (let i = combined.length - 1; i > 0; i--) {
+    const j = randomInt(0, i + 1)
+    ;[combined[i], combined[j]] = [combined[j]!, combined[i]!]
+  }
+  return combined.join('')
 }
 
 export async function updateClient(
@@ -140,10 +148,29 @@ export async function updateClient(
     timeline?: string | null
   },
 ): Promise<void> {
-  await requirePermission('client:update')
-  await prisma.client.update({
+  const me = await requirePermission('client:update')
+
+  // Capture before-state for the audit. findFirst (not findUnique) so we can
+  // combine the id + soft-delete filter safely.
+  const before = await prisma.client.findFirst({
     where: { id: clientId, deletedAt: null },
-    data: input,
+    select: { companyName: true, contactName: true, projectBrief: true, budget: true, timeline: true },
+  })
+  if (!before) return
+
+  await prisma.$transaction(async (tx) => {
+    await tx.client.update({ where: { id: clientId }, data: input })
+    const { writeAudit } = await import('@/lib/audit')
+    await writeAudit(
+      {
+        action: 'CLIENT_UPDATED',
+        userId: me.id,
+        resource: 'Client',
+        resourceId: clientId,
+        changes: { before, after: { ...before, ...input } },
+      },
+      tx,
+    )
   })
 }
 

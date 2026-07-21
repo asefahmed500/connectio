@@ -10,7 +10,10 @@ import type { UserRole, NotificationType } from '@prisma/client'
 export type { NotificationType, UserRole }
 
 export type NotificationEvent =
+  | { type: 'INVITE_CREATED'; actorId: string; clientId: string | null; inviteId: string; companyName: string; contactName: string }
   | { type: 'INVITE_CONSUMED'; actorId: string; clientId: string; inviteCreatedBy: string; companyName: string }
+  | { type: 'INVITE_EXPIRED'; actorId: string; inviteCreatedBy: string; companyName: string }
+  | { type: 'SUBMISSION_DRAFTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
   | { type: 'SUBMISSION_SUBMITTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
   | { type: 'SUBMISSION_IN_REVIEW'; actorId: string; clientId: string; submissionId: string; formTitle: string }
   | { type: 'SUBMISSION_CHANGES_REQUESTED'; actorId: string; clientId: string; submissionId: string; formTitle: string }
@@ -35,6 +38,15 @@ export type NotificationEvent =
   | { type: 'ERASURE_APPROVED'; actorId: string; targetUserId: string }
   | { type: 'ERASURE_DENIED'; actorId: string; targetUserId: string }
   | { type: 'AUDIT_CHAIN_BROKEN'; actorId: string; adminId: string; brokenCount: number }
+  | { type: 'SYSTEM_ERROR'; actorId: string; message: string; component?: string }
+  | { type: 'SSO_PROVIDER_CREATED'; actorId: string; providerId: string; providerName: string }
+  | { type: 'SSO_PROVIDER_UPDATED'; actorId: string; providerId: string; providerName: string }
+  | { type: 'SSO_PROVIDER_DELETED'; actorId: string; providerName: string }
+  | { type: 'SSO_LOGIN_SUCCESS'; actorId: string; userId: string; providerName: string }
+  | { type: 'SSO_LOGIN_FAILED'; actorId: string; providerName: string; reason: string }
+  | { type: 'SCIM_USER_PROVISIONED'; actorId: string; targetUserId: string; providerName: string }
+  | { type: 'SCIM_USER_DEPROVISIONED'; actorId: string; targetUserId: string; providerName: string }
+  | { type: 'FORM_ASSIGNED'; actorId: string; targetUserId: string; formId: string; formTitle: string; clientSlug?: string }
 
 export type NotificationDTO = {
   id: string

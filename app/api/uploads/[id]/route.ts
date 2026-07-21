@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Readable } from 'node:stream'
 import { getFileDTO, deleteFile } from '@/lib/dal/files'
 import { getCurrentUser } from '@/lib/dal/session'
+import { checkSameOrigin } from '@/lib/auth/csrf'
 import { prisma } from '@/lib/db'
 import { getStorage } from '@/lib/storage'
 
@@ -39,9 +40,12 @@ export async function GET(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  if (!checkSameOrigin(req.headers)) {
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 })
+  }
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

@@ -8,6 +8,7 @@ import { parseFormSchema } from '@/lib/forms/schema'
 import { LiveChat } from '@/components/comments/live-chat'
 import { AssignTeamForm } from './assign-team-form'
 import { UnassignTeamButton } from './unassign-button'
+import { Pagination } from '@/components/shared/pagination'
 import {
   Card,
   CardContent,
@@ -16,8 +17,9 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { Palette } from 'lucide-react'
+import { Palette, ArrowLeft } from 'lucide-react'
 
 export const metadata = { title: 'Client — ClientConnect' }
 
@@ -28,42 +30,51 @@ export async function generateStaticParams() {
 
 export default async function AdminClientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ page?: string; pageSize?: string }>
 }) {
   const { id } = await params
   const client = await getClientDTO(id).catch(() => null)
   if (!client) notFound()
 
-  const submissions = await listSubmissionsWithSchema(id)
+  const sp = await searchParams
+  const page = sp.page ? parseInt(sp.page, 10) : 1
+  const pageSize = sp.pageSize ? parseInt(sp.pageSize, 10) : 20
+
+  const submissions = await listSubmissionsWithSchema(id, { page, pageSize })
   const assignedMembers = await listAssignedTeamMembers(id)
   const unassignedMembers = await listUnassignedTeamMembers(id)
+
+  function link(q: Record<string, string>) {
+    const p = new URLSearchParams(q)
+    return `/admin/clients/${id}?${p}`
+  }
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Link href="/admin/clients" className="text-sm text-muted-foreground hover:text-foreground">
-          ← All clients
+        <Link href="/admin/clients" className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+          <ArrowLeft className="w-3.5 h-3.5" data-icon="inline-start" />
+          All clients
         </Link>
         <div className="flex items-center justify-between mt-2">
           <h1 className="text-3xl font-heading tracking-wide">{client.companyName}</h1>
-          <Link
-            href={`/admin/clients/${id}/edit`}
-            className="inline-flex h-9 items-center justify-center rounded-lg border px-4 text-sm font-medium hover:bg-muted"
-          >
-            Edit details
-          </Link>
+          <Button asChild variant="outline">
+            <Link href={`/admin/clients/${id}/edit`}>Edit details</Link>
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground">
           {client.contactName} · /{client.uniqueSlug}
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="p-4 pb-2">
             <CardDescription>Submissions</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{submissions.length}</CardTitle>
+            <CardTitle className="text-2xl tabular-nums">{submissions.total}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -88,7 +99,7 @@ export default async function AdminClientDetailPage({
               href={`/admin/clients/${id}/branding`}
               className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
             >
-              <Palette className="w-4 h-4" />
+              <Palette className="w-4 h-4" data-icon="inline-start" />
               Customize logo, colors, and portal appearance
             </Link>
           </CardContent>
@@ -129,8 +140,20 @@ export default async function AdminClientDetailPage({
       <Separator />
 
       <div>
-        <h2 className="text-lg font-heading tracking-wide mb-3">Submissions</h2>
-        {submissions.length === 0 ? (
+        <div className="flex items-start justify-between mb-3">
+          <h2 className="text-lg font-heading tracking-wide">Submissions</h2>
+          {submissions.totalPages > 1 && (
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={submissions.total}
+              totalPages={submissions.totalPages}
+              buildHref={link}
+              currentParams={{ page: String(page), pageSize: String(pageSize) }}
+            />
+          )}
+        </div>
+        {submissions.items.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center text-sm text-muted-foreground">
               No submissions yet.
@@ -138,7 +161,7 @@ export default async function AdminClientDetailPage({
           </Card>
         ) : (
           <div className="flex flex-col gap-3">
-            {submissions.map((s) => {
+            {submissions.items.map((s) => {
               const schema = parseFormSchema(s.formSchema as unknown)
               return (
                 <Card key={s.id}>

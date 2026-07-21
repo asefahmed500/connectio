@@ -140,16 +140,16 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
  */
 export async function sendPasswordResetEmail(opts: {
   to: string
-  resetUrl: string
+  otp: string
 }): Promise<void> {
   const { renderStoredTemplate } = await import('@/lib/dal/email-templates')
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const tpl = await renderStoredTemplate(
     'password_reset',
-    { resetUrl: opts.resetUrl, appUrl },
+    { otp: opts.otp, appUrl },
     {
-      subject: 'Reset your ClientConnect password',
-      text: `Click this link to reset your password:\n\n${opts.resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+      subject: 'Your password reset code',
+      text: `Your password reset code is:\n\n${opts.otp}\n\nEnter this code on the password reset page to set a new password. This code expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
     },
   )
   await sendEmail({ to: opts.to, subject: tpl.subject, text: tpl.text, html: tpl.html, category: 'password_reset' })

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useFormStatus } from 'react-dom'
 import { createWebhookAction, updateWebhookAction } from './actions'
 import { Button } from '@/components/ui/button'
@@ -165,12 +166,9 @@ export function WebhookForm({ mode, webhook }: Props) {
 
         <div className="flex items-center gap-2">
           <SubmitButton label={mode === 'create' ? 'Create webhook' : 'Save changes'} />
-          <a
-            href="/admin/webhooks"
-            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
-          >
-            Cancel
-          </a>
+          <Button asChild variant="outline">
+            <Link href="/admin/webhooks">Cancel</Link>
+          </Button>
         </div>
       </div>
     </form>

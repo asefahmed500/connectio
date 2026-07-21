@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
-import { createForm, updateForm } from '@/lib/dal/forms'
+import { createForm, updateForm, sendFormToUsers } from '@/lib/dal/forms'
 import { FormSchemaV1 } from '@/lib/forms/schema'
 
 const MetaSchema = z.object({
@@ -87,4 +87,34 @@ export async function updateFormAction(
   revalidatePath('/admin/forms')
   revalidatePath(`/admin/forms/${formId}`)
   return { success: true, formId }
+}
+
+const SendFormSchema = z.object({
+  formId: z.string().min(1),
+  userIds: z.array(z.string().min(1)).min(1, 'Select at least one user'),
+})
+
+export type SendFormState = { ok: true; recipients: number } | { error: string }
+
+export async function sendFormToUsersAction(
+  _prev: SendFormState | undefined,
+  formData: FormData,
+): Promise<SendFormState> {
+  await requireRole('SUPER_ADMIN')
+
+  const raw = formData.get('userIds')
+  let userIds: string[]
+  try {
+    userIds = JSON.parse(raw as string)
+  } catch {
+    return { error: 'Invalid user IDs' }
+  }
+
+  const parsed = SendFormSchema.safeParse({ formId: formData.get('formId'), userIds })
+  if (!parsed.success) return { error: parsed.error.flatten().fieldErrors.userIds?.[0] ?? 'Invalid input' }
+
+  const results = await sendFormToUsers(parsed.data.formId, parsed.data.userIds)
+
+  revalidatePath(`/admin/forms/${formData.get('formId')}`)
+  return { ok: true, recipients: results.length }
 }

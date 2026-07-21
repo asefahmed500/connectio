@@ -86,6 +86,21 @@ export const getTeamMemberDTO = cache(async (teamMemberId: string) => {
 })
 
 /**
+ * Check whether an email is already registered (case-insensitive).
+ * Used by the create-team-member flow before calling createTeamMember,
+ * so the action can surface a user-friendly message instead of relying
+ * on Prisma's unique-constraint exception.
+ */
+export async function checkEmailTaken(email: string): Promise<boolean> {
+  await requirePermission('team:manage')
+  const existing = await prisma.user.findUnique({
+    where: { email: email.toLowerCase() },
+    select: { id: true },
+  })
+  return existing !== null
+}
+
+/**
  * Create a team member from an existing user (admin promotes a known user) OR
  * create a brand-new user. We pick the latter for the v1 admin flow: admin
  * enters name/email/temporary password, account is created as TEAM_MEMBER.

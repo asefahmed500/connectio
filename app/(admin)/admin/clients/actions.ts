@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
 import { createClientAccount } from '@/lib/dal/clients'
 import { sendEmail } from '@/lib/email'
-import { renderWelcomeEmail } from '@/lib/email-templates'
 
 const CreateClientSchema = z.object({
   email: z.string().email(),
@@ -41,33 +40,33 @@ export async function createClientAction(
 
   const { email, name, companyName, contactName } = parsed.data
 
-  let account
   try {
-    account = await createClientAccount({ email, name, companyName, contactName })
+    await createClientAccount({ email, name, companyName, contactName })
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to create account' }
+    console.error('[clients] createClientAccount failed:', err)
+    return { error: 'Could not create client account. Check the logs.' }
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  const loginUrl = `${appUrl}/login`
-
-  const tpl = await renderWelcomeEmail({
-    contactName,
-    companyName,
-    email,
-    password: account.password,
-    loginUrl,
-  })
-
+  // Trigger the OTP-based password reset so the user picks their own password
+  // instead of receiving one in plaintext via email.
   try {
-    await sendEmail({
-      to: email,
-      subject: tpl.subject,
-      text: tpl.text,
-      html: tpl.html,
-    })
+    const { createPasswordResetOtp } = await import('@/lib/dal/password-reset')
+    const { rawOtp, userExists } = await createPasswordResetOtp(email)
+    if (userExists && rawOtp) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+      await sendEmail({
+        to: email,
+        subject: 'Welcome to ClientConnect — set your password',
+        text:
+          `Hello ${contactName},\n\n` +
+          `Your account has been created at ${companyName}.\n\n` +
+          `Set your password: ${appUrl}/reset-password\n` +
+          `Your verification code: ${rawOtp}\n\n` +
+          `The code expires in 10 minutes.`,
+      })
+    }
   } catch (err) {
-    console.error('[createClient] Email send failed:', err)
+    console.error('[clients] welcome email failed:', err)
   }
 
   revalidatePath('/admin/clients')

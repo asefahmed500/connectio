@@ -228,19 +228,32 @@ export type SubmissionWithSchemaDTO = SubmissionDTO & {
   formSchema: unknown
 }
 
-export async function listSubmissionsWithSchema(clientId: string): Promise<SubmissionWithSchemaDTO[]> {
+export async function listSubmissionsWithSchema(
+  clientId: string,
+  params?: PaginationParams,
+): Promise<PaginatedResult<SubmissionWithSchemaDTO>> {
   await requireClientAccess(clientId)
+  const { take, skip } = paginationParams(params)
 
-  const rows = await prisma.submission.findMany({
-    where: { clientId, deletedAt: null },
-    include: { form: { select: { title: true, formSchema: true } } },
-    orderBy: { updatedAt: 'desc' },
-  })
+  const [rows, total] = await Promise.all([
+    prisma.submission.findMany({
+      where: { clientId, deletedAt: null },
+      include: { form: { select: { title: true, formSchema: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.submission.count({ where: { clientId, deletedAt: null } }),
+  ])
 
-  return rows.map((s) => ({
-    ...toDTO(s),
-    formSchema: s.form.formSchema,
-  }))
+  return toPaginated(
+    rows.map((s) => ({
+      ...toDTO(s),
+      formSchema: s.form.formSchema,
+    })),
+    total,
+    params,
+  )
 }
 
 export async function listSubmissionsForClient(
@@ -366,17 +379,28 @@ export const updateSubmissionStatus = updateStatus
  * List submissions for a given form (admin form detail page).
  * Requires SUPER_ADMIN or TEAM_MEMBER role.
  */
-export async function listSubmissionsForForm(formId: string): Promise<
-  Array<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>
-> {
+export async function listSubmissionsForForm(
+  formId: string,
+  opts: PaginationParams = {},
+): Promise<PaginatedResult<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>> {
   await requireRole('SUPER_ADMIN', 'TEAM_MEMBER')
 
-  return prisma.submission.findMany({
-    where: { formId, deletedAt: null },
-    include: { client: { select: { companyName: true, uniqueSlug: true } } },
-    orderBy: { updatedAt: 'desc' },
-    take: 20,
-  }) as unknown as Promise<
-    Array<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>
-  >
+  const { take, skip } = paginationParams(opts)
+
+  const [rows, total] = await Promise.all([
+    prisma.submission.findMany({
+      where: { formId, deletedAt: null },
+      include: { client: { select: { companyName: true, uniqueSlug: true } } },
+      orderBy: { updatedAt: 'desc' },
+      take,
+      skip,
+    }),
+    prisma.submission.count({ where: { formId, deletedAt: null } }),
+  ])
+
+  return toPaginated(
+    rows as unknown as Array<{ id: string; status: string; updatedAt: Date; client: { companyName: string; uniqueSlug: string } }>,
+    total,
+    opts,
+  )
 }

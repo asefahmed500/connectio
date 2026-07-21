@@ -41,10 +41,11 @@ export async function GET(req: NextRequest) {
     prisma.submission.findMany({
       where: {
         client: { deletedAt: null },
-        formId: { contains: q, mode: 'insensitive' },
+        form: { title: { contains: q, mode: 'insensitive' } },
       },
       include: {
-        client: { select: { companyName: true, uniqueSlug: true } },
+        client: { select: { id: true, companyName: true, uniqueSlug: true } },
+        form: { select: { title: true } },
       },
       take: 10,
       orderBy: { createdAt: 'desc' },
@@ -55,6 +56,8 @@ export async function GET(req: NextRequest) {
     id: s.id,
     status: s.status,
     formId: s.formId,
+    formTitle: s.form.title,
+    clientId: s.client?.id ?? '',
     clientName: s.client?.companyName ?? '—',
     clientSlug: s.client?.uniqueSlug ?? '',
     createdAt: s.createdAt,

@@ -20,7 +20,7 @@ describe('parseFormSchema', () => {
 
   it('rejects an unknown field type', () => {
     expect(() =>
-      parseFormSchema({ version: 1, fields: [{ ...validField, type: 'file' }] }),
+      parseFormSchema({ version: 1, fields: [{ ...validField, type: 'rating' }] }),
     ).toThrow()
   })
 

@@ -48,7 +48,7 @@ export function ChangePasswordForm({ slug }: { slug: string }) {
         <p className="text-sm text-destructive" role="alert">{state.error}</p>
       )}
       {state?.success && (
-        <p className="text-sm text-emerald-600">Password updated.</p>
+        <p className="text-sm text-emerald-600" role="status">Password updated.</p>
       )}
       <Button type="submit" disabled={pending} className="self-start">
         {pending ? 'Updating…' : 'Change password'}

@@ -42,6 +42,8 @@ proxy.ts → Server Components → DAL (lib/dal/*) → Prisma
            Route Handlers     → DAL → storage adapter
 ```
 
+**`proxy.ts` is optimistic-only** — verifies the JWT via crypto (no DB lookup), redirects unauthenticated users. Real authorization happens in the DAL (`requireSession()` → `requireRole()` / `requireClientAccess()`). Don't add DB work to the proxy; it runs on every request including prefetches.
+
 **DAL is the only door to the database.** Never call `prisma` from pages or actions. Pattern: `requireSession()` → `requireRole()` / `requireClientAccess()` → plain DTOs. Reads wrapped in `cache()`. Mutations in `$transaction` with `writeAudit()` + `notify()` outside tx.
 
 Client-only heavy components (palettes, chat, carousels) use `next/dynamic` with `ssr: false` — defer their bundle from the critical path.
@@ -64,6 +66,8 @@ Refresh: `POST /api/auth/refresh` — CSRF-protected (Origin check), rate-limite
 
 **API routes need explicit `getCurrentUser()` guard** — DAL functions silently return empty/null for unauthenticated users rather than throwing.
 
+**Password reset** uses 6-digit OTP (SHA-256 hashed, 10-min expiry, 5/min rate-limit): `lib/dal/password-reset.ts` → `createPasswordResetOtp` / `verifyResetOtp` / `resetPassword`. 3-step client form at `app/(auth)/reset-password/`. OTP template uses `{{otp}}` variable, seeded in `scripts/seed-email-templates.ts`.
+
 ## Styling Conventions
 
 - **Forms:** `FieldGroup` + `Field` + `FieldLabel` from `components/ui/field.tsx`. Validation: `data-invalid` on `Field`, `aria-invalid` on control.
@@ -73,7 +77,7 @@ Refresh: `POST /api/auth/refresh` — CSRF-protected (Origin check), rate-limite
 
 ## Notifications
 
-A large `NotificationType` enum in the Prisma schema. Adding a new event requires updating 4 files: `prisma/schema.prisma` (enum), `lib/notifications/types.ts` (discriminated union), `lib/notifications/audience.ts` (recipients), `lib/notifications/templates.ts` (render). (Don't trust the count in CLAUDE.md — it's stale; check the enum directly.)
+37 notification events in the Prisma `NotificationType` enum, mirrored 1:1 in the TypeScript discriminated union at `lib/notifications/types.ts`. Adding a new event requires updating 4 files: `prisma/schema.prisma` (enum), `lib/notifications/types.ts` (union), `lib/notifications/audience.ts` (recipients), `lib/notifications/templates.ts` (render). The union is exhaustive — TypeScript's switch exhaustiveness in `audience.ts` enforces coverage.
 
 Transport: SSE at `/api/notifications/stream` (GET, polls DB every 8s, re-auths each cycle — blocks/rejects close the stream). Falls back to HTTP polling in dev. Bell component: `useNotifications(enabled)` hook in `hooks/use-notifications.ts`.
 
@@ -85,7 +89,8 @@ Notification list API returns `{ items, unread }` shape — always format both, 
 
 ## Forms & Storage
 
-- **Forms:** `FormSchemaV1` stored as Prisma `Json`. `validateSubmission(schema, data)` returns Zod `SafeParseResult`. Adding a field type → update `lib/forms/schema.ts` + `lib/forms/validate.ts` + `FieldRenderer`.
+- **Forms:** `FormSchemaV1` stored as Prisma `Json`. `validateSubmission(schema, data)` returns Zod `SafeParseResult`. Adding a field type → update `lib/forms/schema.ts` + `lib/forms/validate.ts` + `components/forms/field-renderer.tsx`. 13 field types supported (text, textarea, number, email, url, select, multiselect, radio, checkbox, date, datetime, file, heading).
+- **Form editor** at `app/(admin)/admin/forms/[id]/` includes **Send form** dialog (`components/forms/send-form-dialog.tsx`) that assigns forms to users. `sendFormToUsers(formId, userIds)` in `lib/dal/forms.ts` auto-creates Client records for non-client users (team members, admins), creates draft submissions, and fires `FORM_ASSIGNED` notifications. Recipient picker uses `listUsersForPicker()` from `lib/dal/users.ts`.
 - **Files:** Storage adapter auto-wired: `S3Adapter` when `S3_*` or `R2_*` env vars present, else `LocalFsAdapter(root=./storage)` in dev. Production throws without S3/R2 config. Magic-byte validation before write. Soft delete on DB row; storage objects kept. **Upload POST:** DB row creation in try/catch with `storage.delete(storageKey)` on failure. Never leak `storageKey` or raw `err.message`.
 - **Rate limiter:** Hybrid — Upstash Redis when configured, in-memory token bucket fallback. `rateLimit(key, bucket)` and `rateLimitAll(...checks)`.
 - **Email:** Nodemailer. Priority: Gmail OAuth2 → Gmail App Password → Generic SMTP. Stubs to console in dev if unconfigured. Silent drop in production.
@@ -93,7 +98,8 @@ Notification list API returns `{ items, unread }` shape — always format both, 
 ## Testing
 
 - Needs Postgres (`connectio_test` DB). Vitest runs sequentially (`fileParallelism: false`).
-- Integration tests: `tests/integration/` truncate all tables between tests.
+- Integration tests (`tests/integration/`) truncate all tables between tests **and require a `prisma://` or `prisma+postgres://` DATABASE_URL** (Prisma Accelerate) — they fail with local Postgres URLs.
+- Unit tests (`tests/unit/`) run offline and pass with any DATABASE_URL.
 - E2E: Playwright on port 3001, sequential, 1 worker.
 - `tests/stubs/empty.ts` mocks `server-only` in vitest config via `resolve.alias`.
 - `tests/setup.ts` mocks `next/headers` globally, sets `AUTH_JWT_SECRET`, `DATABASE_URL`. Tests swap user via `globalThis.__ccTestToken`.
@@ -131,7 +137,7 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 | Email logging | `lib/email.ts` | `sendEmail()` writes `EmailLog` rows (provider, status, category) for every email. Admin UI at `/admin/email-logs` |
 | Email templates | `lib/dal/email-templates.ts` | `renderStoredTemplate(key, vars, fallback)` with `{{var}}` substitution. Seed: `scripts/seed-email-templates.ts` |
 | 2FA / MFA | `lib/auth/totp.ts`, `lib/dal/two-factor.ts`, `lib/auth/tokens.ts` | TOTP (RFC 6238): base32 + HMAC-SHA1. `signMfaToken()`/`verifyMfaToken()` issue short-lived `mfa_token` cookie between password and challenge. Enrollment on client profile. |
-| Permissions (RBAC) | `lib/auth/permissions.ts` | 47 typed permissions, `requirePermission()` replaces `requireRole()` in DAL modules. Admin viewer: `/admin/roles` |
+| Permissions (RBAC) | `lib/auth/permissions.ts` | 47 typed permissions across 3 roles. `requirePermission()` used in newer DAL modules; `requireRole()` still used in layouts, server actions, and older DAL functions (submissions, analytics). Both coexist — check which the surrounding code uses. Admin viewer: `/admin/roles` |
 | Rate limiter | `lib/ratelimit.ts` | Hybrid Upstash Redis / in-memory token bucket. Protects login, refresh, forgot-pw, reset-pw, invite reg, SSO callback by IP + email. |
 | Client branding | `lib/dal/client-settings.ts` | Portal branding (logo, color, title, custom CSS) applied in `app/(client)/client-shell.tsx`. Admin: `/admin/clients/[id]/branding` |
 | Bulk user ops | `lib/dal/users.ts` | `bulkToggleBlockUser()`, `bulkDeleteUser()`. UI uses `name="userIds"` checkboxes + `formAction` buttons on users page. |
@@ -154,8 +160,11 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 ## Key Gotchas
 
 - **`typecheck` is fast, `build` is the real verification.** Run `typecheck` after every change; `build` for final verification.
+- **RSC form action boundary:** In Server Components, `<form action={fn}>` cannot take an inline arrow function (`async (fd) => { await action(id, fd) }`) — it can't cross the RSC boundary. Use `action.bind(null, id)` on the server action. Also: `<form action>` return type must be `void | Promise<void>`, not `Promise<{success?, error?}>` — if the action returns state, extract the form into a client component using `useActionState`.
+- **Radix `SelectItem value=""` throws** unconditionally. Use a sentinel like `value="all"` for "no filter" options, and adjust the filter logic to check `=== 'all'` before passing to the DB query.
+- **`suppressHydrationWarning`** on `<html>` and `<body>` in `app/layout.tsx` — browser extensions (Grammarly, etc.) inject `data-*` attributes that cause hydration mismatches without it.
 - **Route handler `req` param** — keep in signature even if unused (Next.js passes it).
-- **Server action form binding:** server actions with signature `(_prev, formData)` cannot be used directly as `form action={action}` (expects `(formData) => void`). Wrap: `async (fd) => { await action(null, fd) }`. Same applies to `action.bind(null, id)`.
+- **Server actions with `(_prev, formData)` signature** (designed for `useActionState`) cannot be used directly as `<form action>` (expects `(formData) => void`). In a client component, use `useActionState`. In a server component, `.bind(null, id)` only works if the action's extra params come before `_prev`.
 - **`writeAudit`'s `changes` field** only accepts `{ before?, after? }` — arbitrary keys like `via` will type-error.
 - **`NotFoundError` constructor** takes a single argument (the resource name), e.g. `throw new NotFoundError('User')`.
 - **Auth forms** use `<form action={action} noValidate>` with hidden inputs. Server action validates; `react-hook-form` provides `register()` for UI.
@@ -167,11 +176,12 @@ Every admin feature follows the same pattern: `app/(admin)/admin/<feature>/page.
 - **Migration naming:** snake_case (`add_user_is_active` not `addUserIsActive`).
 - **`lib/dal/` conventions:** login action uses `select` (not `include`) — add new fields to both the query and the type annotation. Admin server actions at `app/(admin)/admin/clients/[id]/actions.ts` and `app/(admin)/admin/team/[id]/actions.ts` need `requireRole('SUPER_ADMIN')`.
 - **Scripts** in `scripts/`: `seed-test-data.ts`, `reset-admin.ts`, `ensure-e2e-admin.ts`, `smoke-auth.ts`, `count.ts`, `backfill-audit-hashes.ts`, `seed-email-templates.ts`.
+- **Integration tests need Prisma Accelerate URL** — they fail with `Invalid datasource` error on plain `postgresql://` URLs. Unit tests don't require this.
 
 ## Known Issues & Defensive Patterns
 
 - **Variable shadowing in `$transaction` callbacks**: If the outer scope has `user` from `requirePermission()` and the transaction re-fetches `const user = await tx.user.findUnique(...)`, the inner `user` shadows the admin's identity. The audit log ends up recording the victim as the actor. **Fix: rename outer to `admin`, inner to `target`/`erasureTarget`.** This was a real bug in `lib/dal/gdpr.ts:approveErasure`.
-- **Auth guard gaps**: All team/client analytics functions in `lib/dal/analytics.ts` lack guards (callers must enforce). SCIM DAL functions intentionally have no inline guards — auth is at the route level via `verifyScimApiKey()`.
+- **SCIM DAL functions intentionally have no inline guards** — auth is at the route level via `verifyScimApiKey()`.
 - **DAL file adding a `getDistinct*` helper must also add its auth guard** — `getDistinctEmailCategories` initially missed the `requirePermission('audit:read')` call.
 - **SSO form `spEntityId`**: The SSO provider form renders `spEntityId` in the General section. It was read by `createSsoAction` but silently dropped by `updateSsoAction`. Both now pass it through. When adding a new SSO config field, update both `createSsoProvider` and `updateSsoProvider` types.
-- **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy.
+- **Docs** at `docs/` (`docs/README.md` has reading order). Code is source of truth; `prd.md` is legacy. `REVIEW-*.md` files are archived design review feedback.`

@@ -14,7 +14,7 @@ import { verifyAccessToken } from '@/lib/auth/tokens'
 
 const PROTECTED_PREFIXES = ['/admin', '/team', '/dashboard/visitor']
 const isAuthOnlyPath = (path: string) =>
-  path === '/login' || path === '/reset-password' || path.startsWith('/reset-password/')
+  path === '/login' || path === '/reset-password'
 
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname

@@ -8,20 +8,22 @@ import { createSession } from '@/lib/auth/session'
 import { writeAudit } from '@/lib/audit'
 import { rateLimit, rateLimitAll } from '@/lib/ratelimit'
 
-const Schema = z.object({
-  slug: z.string().min(3).max(32).regex(/^[a-z0-9-]+$/),
-  email: z.email(),
-  name: z.string().min(1).max(120),
-  password: z
-    .string()
-    .min(12, 'Password must be at least 12 characters')
-    .regex(/[A-Za-z]/, 'Include at least one letter')
-    .regex(/\d/, 'Include at least one number')
-    .regex(/[^A-Za-z0-9]/, 'Include at least one symbol'),
-})
+function makeSchema(minLength: number) {
+  return z.object({
+    slug: z.string().min(3).max(32).regex(/^[a-z0-9-]+$/),
+    email: z.email(),
+    name: z.string().min(1).max(120),
+    password: z
+      .string()
+      .min(minLength, `Password must be at least ${minLength} characters`)
+      .regex(/[A-Za-z]/, 'Include at least one letter')
+      .regex(/\d/, 'Include at least one number')
+      .regex(/[^A-Za-z0-9]/, 'Include at least one symbol'),
+  })
+}
 
 export type RegisterFieldErrors = z.inferFlattenedErrors<
-  typeof Schema
+  ReturnType<typeof makeSchema>
 >['fieldErrors']
 
 export type RegisterState =
@@ -41,6 +43,9 @@ export async function registerAction(
   _prev: RegisterState,
   formData: FormData,
 ): Promise<RegisterState> {
+  const { getNumberSetting } = await import('@/lib/dal/settings')
+  const minLength = await getNumberSetting('passwordMinLength')
+  const Schema = makeSchema(minLength)
   const parsed = Schema.safeParse({
     slug: formData.get('slug'),
     email: formData.get('email'),

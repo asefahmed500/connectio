@@ -31,8 +31,8 @@ export default async function ProfilePage({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <UserIcon className="h-4 w-4" />
-            Account details
+            <Download className="h-4 w-4" data-icon="inline-start" />
+            Data &amp; privacy
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -54,10 +54,9 @@ export default async function ProfilePage({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Key className="h-4 w-4" />
+            <Key className="h-4 w-4" data-icon="inline-start" />
             Change password
           </CardTitle>
-          <CardDescription>Update your password. Must be at least 8 characters.</CardDescription>
         </CardHeader>
         <CardContent>
           <ChangePasswordForm slug={slug} />
@@ -92,12 +91,12 @@ export default async function ProfilePage({
         <CardContent className="flex flex-col gap-4 max-w-sm">
           <div className="flex flex-col gap-1.5">
             <p className="text-xs text-muted-foreground">Export all your personal data as JSON, including submissions, messages, and files.</p>
-            <Link href="/api/account/export" download>
-              <Button variant="outline" size="sm">
-                <Download className="h-3.5 w-3.5" />
+            <Button asChild variant="outline" size="sm" className="w-fit">
+              <Link href="/api/account/export" download>
+                <Download className="h-3.5 w-3.5" data-icon="inline-start" />
                 Export my data
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -106,7 +105,7 @@ export default async function ProfilePage({
             </p>
             <form action={requestErasureAction.bind(null, slug)}>
               <Button type="submit" variant="destructive" size="sm">
-                <Trash2 className="h-3.5 w-3.5" />
+                <Trash2 className="h-3.5 w-3.5" data-icon="inline-start" />
                 Request account erasure
               </Button>
             </form>

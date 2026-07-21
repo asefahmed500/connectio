@@ -3,6 +3,10 @@
 import { z } from 'zod'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+// `isRedirectError` is not part of the public `next/navigation` surface in
+// this Next version. The private `next/dist/...` path is the official escape
+// hatch documented by the Next team for detecting NEXT_REDIRECT throws in
+// server actions that also return state. Re-evaluate on each Next upgrade.
 import { isRedirectError } from 'next/dist/client/components/redirect-error'
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/db'
@@ -98,6 +102,13 @@ export async function loginAction(_prev: LoginState, formData: FormData): Promis
         maxAge: 5 * 60,
       })
       redirect(next && next !== '/' ? `/login/2fa?next=${encodeURIComponent(next)}` : '/login/2fa')
+    }
+
+    // Enforce admin 2FA requirement from SystemSetting.
+    const { getBooleanSetting } = await import('@/lib/dal/settings')
+    const requireAdmin2fa = await getBooleanSetting('requireAdminTwoFactor')
+    if (requireAdmin2fa && loginUser.role === 'SUPER_ADMIN' && !loginUser.totpEnabled) {
+      return { error: 'Your admin account requires two-factor authentication. Contact your administrator to enable it.' }
     }
 
     // GC expired sessions opportunistically.

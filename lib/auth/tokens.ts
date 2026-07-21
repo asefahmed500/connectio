@@ -148,3 +148,54 @@ export async function verifyMfaToken(token: string | undefined): Promise<{
     return { ok: false, reason: 'invalid' }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Password reset token (short-lived, issued after OTP verification)
+// ─────────────────────────────────────────────────────────────────
+
+const RESET_TTL_SECONDS = 5 * 60 // 5 minutes to complete the password form
+
+export type ResetClaims = {
+  pwdResetId: string
+  purpose: 'reset'
+  iat: number
+  exp: number
+  jti: string
+}
+
+export async function signResetToken(passwordResetTokenId: string): Promise<string> {
+  const now = Math.floor(Date.now() / 1000)
+  return new SignJWT({
+    pwdResetId: passwordResetTokenId,
+    purpose: 'reset',
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt(now)
+    .setExpirationTime(now + RESET_TTL_SECONDS)
+    .setJti(crypto.randomUUID())
+    .sign(getSecret())
+}
+
+export async function verifyResetTokenCookie(token: string | undefined): Promise<{
+  ok: boolean
+  claims?: ResetClaims
+  reason?: string
+}> {
+  if (!token) return { ok: false, reason: 'missing' }
+  try {
+    const { payload } = await jwtVerify(token, getSecret(), { algorithms: ['HS256'] })
+    if (payload.purpose !== 'reset') return { ok: false, reason: 'invalid' }
+    return {
+      ok: true,
+      claims: {
+        pwdResetId: payload.pwdResetId as string,
+        purpose: 'reset',
+        iat: payload.iat!,
+        exp: payload.exp!,
+        jti: payload.jti as string,
+      },
+    }
+  } catch {
+    return { ok: false, reason: 'invalid' }
+  }
+}

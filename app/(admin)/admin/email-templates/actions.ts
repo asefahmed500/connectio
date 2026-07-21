@@ -7,15 +7,26 @@ import {
   deleteEmailTemplate,
 } from '@/lib/dal/email-templates'
 
-export async function saveEmailTemplateAction(prev: unknown, formData: FormData) {
+/**
+ * Saves (creates or updates) an email template.
+ *
+ * Signature is `(id | null, _prev, formData)` so it can be invoked both as a
+ * bound form action (server component) and via an inline arrow in a client
+ * component (see template-form.tsx).
+ */
+export async function saveEmailTemplateAction(
+  id: string | null,
+  _prev: unknown,
+  formData: FormData,
+) {
   const raw = Object.fromEntries(formData)
-  const id = raw.id as string
 
   const key = (raw.key as string).trim()
   if (!key) return { error: 'Key is required' }
 
   await upsertEmailTemplate({
-    key: id ? key : key,
+    id: id ?? undefined,
+    key,
     name: (raw.name as string) || key,
     category: (raw.category as string) || null,
     subject: raw.subject as string,

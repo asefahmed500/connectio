@@ -89,9 +89,60 @@ function renderField(
           placeholder={field.placeholder}
           disabled={disabled}
           required={field.required}
+          minLength={field.minLength}
           maxLength={field.maxLength}
           rows={6}
         />
+      )
+
+    case 'date':
+      return (
+        <Input
+          id={id}
+          type="date"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          required={field.required}
+        />
+      )
+
+    case 'datetime':
+      return (
+        <Input
+          id={id}
+          type="datetime-local"
+          value={typeof value === 'string' ? value : ''}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          required={field.required}
+        />
+      )
+
+    case 'file':
+      // NOTE: the file field type is not yet wired to the upload pipeline.
+      // Previously this component stored only the filename string in form
+      // state, which then got serialized as a regular text value on submit —
+      // silently losing the actual File object. Until real multipart upload
+      // support is added, surface this clearly to the user instead of
+      // pretending the upload succeeded.
+      return (
+        <div
+          id={id}
+          className="rounded-md border border-dashed border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm text-amber-800 dark:text-amber-200"
+          role="note"
+        >
+          <strong>File upload is not yet available.</strong>{' '}
+          Please contact your account team to send files via the Files section of your portal.
+        </div>
+      )
+
+    case 'heading':
+      return (
+        <div className="pt-2 pb-1">
+          <h3 className="text-lg font-semibold">{field.label}</h3>
+          {field.help && <p className="text-sm text-muted-foreground mt-0.5">{field.help}</p>}
+        </div>
       )
 
     case 'select':

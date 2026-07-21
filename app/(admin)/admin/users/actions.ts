@@ -3,7 +3,14 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
-import { updateUser, toggleBlockUser, adminResetPassword, deleteUser, bulkToggleBlockUser, bulkDeleteUser } from '@/lib/dal/users'
+import {
+  updateUser,
+  toggleBlockUser,
+  adminInitiatePasswordReset,
+  deleteUser,
+  bulkToggleBlockUser,
+  bulkDeleteUser,
+} from '@/lib/dal/users'
 import { sendEmail } from '@/lib/email'
 import type { UserRole } from '@prisma/client'
 
@@ -17,7 +24,7 @@ const UpdateSchema = z.object({
 export type UserActionState =
   | undefined
   | { error: string }
-  | { success: true; password?: string }
+  | { success: true }
 
 export async function updateUserAction(
   _prev: UserActionState,
@@ -42,7 +49,8 @@ export async function updateUserAction(
     revalidatePath('/admin/users')
     return { success: true }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Update failed' }
+    console.error('[users] update failed:', err)
+    return { error: 'Could not update user. Check the logs.' }
   }
 }
 
@@ -57,20 +65,31 @@ export async function toggleBlockAction(userId: string) {
   }
 }
 
+/**
+ * Triggers the self-serve password-reset flow for the user — emails a 6-digit
+ * OTP that the user enters at /reset-password to pick their own password.
+ *
+ * The plaintext password is NEVER transported: not in email, not in action
+ * state, not in client React DevTools. (Previous implementation generated a
+ * password and returned + emailed it in plaintext.)
+ */
 export async function adminResetPasswordAction(userId: string): Promise<UserActionState> {
   await requireRole('SUPER_ADMIN')
   try {
-    const result = await adminResetPassword(userId)
-
-    const { prisma } = await import('@/lib/db')
-    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { email: true, name: true } })
+    const { email, name, otp } = await adminInitiatePasswordReset(userId)
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
     try {
       await sendEmail({
-        to: user.email,
-        subject: 'Your ClientConnect password has been reset',
-        text: `Hello ${user.name},\n\nYour password has been reset by an administrator.\n\nYour new password: ${result.password}\n\nLogin at: ${appUrl}/login\n\nPlease change your password after logging in.`,
+        to: email,
+        subject: 'Reset your ClientConnect password',
+        text:
+          `Hello ${name},\n\n` +
+          `An administrator has reset your password.\n\n` +
+          `Your verification code: ${otp}\n\n` +
+          `Enter it at ${appUrl}/reset-password to choose a new password.\n` +
+          `The code expires in 10 minutes.\n\n` +
+          `If you did not expect this, contact your administrator.`,
       })
     } catch (err) {
       console.error('[adminResetPassword] email failed:', err)
@@ -78,9 +97,10 @@ export async function adminResetPasswordAction(userId: string): Promise<UserActi
 
     revalidatePath(`/admin/users/${userId}`)
     revalidatePath('/admin/users')
-    return { success: true, password: result.password }
+    return { success: true }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Reset failed' }
+    console.error('[users] adminResetPassword failed:', err)
+    return { error: 'Could not reset password. Check the logs.' }
   }
 }
 

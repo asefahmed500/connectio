@@ -14,20 +14,22 @@ type Result = {
     email: string
     role: string
   }>
-  clients: Array<{
-    id: string
-    companyName: string
-    contactName: string
-    uniqueSlug: string
-  }>
-  submissions: Array<{
-    id: string
-    status: string
-    formId: string
-    clientName: string
-    clientSlug: string
-    createdAt: string
-  }>
+    clients: Array<{
+      id: string
+      companyName: string
+      contactName: string
+      uniqueSlug: string
+    }>
+    submissions: Array<{
+      id: string
+      status: string
+      formId: string
+      formTitle: string
+      clientId: string
+      clientName: string
+      clientSlug: string
+      createdAt: string
+    }>
 }
 
 export default function SearchPage() {
@@ -56,7 +58,7 @@ export default function SearchPage() {
   }, [q, search])
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-heading tracking-wide">Search</h1>
         <p className="text-sm text-muted-foreground">
@@ -81,11 +83,24 @@ export default function SearchPage() {
           {result.users.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <User className="h-4 w-4" />
+                <User className="h-4 w-4" data-icon="inline-start" />
                 Users
               </div>
               {result.users.map((u) => (
-                <Card key={u.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/users/${u.id}`)}>
+                <Card
+                  key={u.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open user ${u.name}`}
+                  onClick={() => router.push(`/admin/users/${u.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      router.push(`/admin/users/${u.id}`)
+                    }
+                  }}
+                >
                   <CardContent className="p-3 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{u.name}</span>
@@ -101,11 +116,24 @@ export default function SearchPage() {
           {result.clients.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <Building2 className="h-4 w-4" />
+                <Building2 className="h-4 w-4" data-icon="inline-start" />
                 Clients
               </div>
               {result.clients.map((c) => (
-                <Card key={c.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/admin/clients/${c.id}`)}>
+                <Card
+                  key={c.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open client ${c.companyName}`}
+                  onClick={() => router.push(`/admin/clients/${c.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      router.push(`/admin/clients/${c.id}`)
+                    }
+                  }}
+                >
                   <CardContent className="p-3 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{c.companyName}</span>
@@ -120,15 +148,28 @@ export default function SearchPage() {
           {result.submissions.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 text-sm font-medium">
-                <FileText className="h-4 w-4" />
+                <FileText className="h-4 w-4" data-icon="inline-start" />
                 Submissions
               </div>
               {result.submissions.map((s) => (
-                <Card key={s.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/dashboard/visitor/${s.clientSlug}/submissions/${s.id}`)}>
+                <Card
+                  key={s.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open client ${s.clientName}`}
+                  onClick={() => router.push(s.clientId ? `/admin/clients/${s.clientId}` : '/admin/clients')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      router.push(s.clientId ? `/admin/clients/${s.clientId}` : '/admin/clients')
+                    }
+                  }}
+                >
                   <CardContent className="p-3 flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium">{s.clientName}</span>
-                      <span className="text-xs text-muted-foreground">Form: {s.formId} · {new Date(s.createdAt).toLocaleDateString()}</span>
+                      <span className="text-xs text-muted-foreground">{s.formTitle} · {new Date(s.createdAt).toLocaleDateString()}</span>
                     </div>
                     <Badge variant="outline">{s.status}</Badge>
                   </CardContent>
@@ -145,6 +186,14 @@ export default function SearchPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {!result && q.trim().length > 0 && q.trim().length < 2 && (
+        <Card>
+          <CardContent className="p-6 text-center text-sm text-muted-foreground">
+            Type at least 2 characters to search.
+          </CardContent>
+        </Card>
       )}
     </div>
   )

@@ -2,6 +2,7 @@
 
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
+import { getCurrentUser } from '@/lib/dal/session'
 import { postComment, deleteComment } from '@/lib/dal/comments'
 
 const PostSchema = z.object({
@@ -38,7 +39,8 @@ export async function postCommentAction(
     revalidateForClient(parsed.data.clientId)
     return { success: true }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to post' }
+    console.error('[comments] postCommentAction failed:', err)
+    return { error: 'Could not post comment. Try again.' }
   }
 }
 
@@ -62,7 +64,8 @@ export async function postReplyAction(
     revalidateForClient(parsed.data.clientId)
     return { success: true }
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to post' }
+    console.error('[comments] postReplyAction failed:', err)
+    return { error: 'Could not post reply. Try again.' }
   }
 }
 

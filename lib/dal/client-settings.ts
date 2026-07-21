@@ -1,6 +1,8 @@
 import 'server-only'
 import { prisma } from '@/lib/db'
 import { requirePermission } from '@/lib/auth/permissions'
+import { requireClientAccess } from '@/lib/dal/session'
+import { sanitizeCustomCss, sanitizeBrandColor } from '@/lib/sanitize/css'
 import { NotFoundError } from '@/lib/errors'
 
 export type ClientSettingsDTO = {
@@ -20,15 +22,17 @@ export type ClientSettingsDTO = {
 type RawSettings = Record<string, unknown>
 
 function toDTO(row: RawSettings): ClientSettingsDTO {
+  // Sanitize at READ time too — defense-in-depth against any pre-existing
+  // unsanitized rows that pre-date the sanitizer.
   return {
     id: row.id as string,
     clientId: row.clientId as string,
-    brandColor: row.brandColor as string | null,
+    brandColor: sanitizeBrandColor(row.brandColor as string | null),
     logoUrl: row.logoUrl as string | null,
     faviconUrl: row.faviconUrl as string | null,
     portalTitle: row.portalTitle as string | null,
     customDomain: row.customDomain as string | null,
-    customCss: row.customCss as string | null,
+    customCss: sanitizeCustomCss(row.customCss as string | null),
     hideBranding: row.hideBranding as boolean,
     createdAt: row.createdAt as Date,
     updatedAt: row.updatedAt as Date,
@@ -36,6 +40,7 @@ function toDTO(row: RawSettings): ClientSettingsDTO {
 }
 
 export async function getClientSettings(clientId: string): Promise<ClientSettingsDTO | null> {
+  await requireClientAccess(clientId)
   const row = await prisma.clientSettings.findUnique({
     where: { clientId },
   })
@@ -56,26 +61,37 @@ export async function upsertClientSettings(
 ): Promise<ClientSettingsDTO> {
   const user = await requirePermission('client:update')
 
+  // Sanitize all admin-controlled presentation fields before persisting.
+  const safeData = {
+    ...data,
+    brandColor: data.brandColor !== undefined && data.brandColor !== null
+      ? sanitizeBrandColor(data.brandColor)
+      : data.brandColor,
+    customCss: data.customCss !== undefined && data.customCss !== null
+      ? sanitizeCustomCss(data.customCss)
+      : data.customCss,
+  }
+
   const row = await prisma.clientSettings.upsert({
     where: { clientId },
     create: {
       clientId,
-      brandColor: data.brandColor ?? null,
-      logoUrl: data.logoUrl ?? null,
-      faviconUrl: data.faviconUrl ?? null,
-      portalTitle: data.portalTitle ?? null,
-      customDomain: data.customDomain ?? null,
-      customCss: data.customCss ?? null,
-      hideBranding: data.hideBranding ?? false,
+      brandColor: safeData.brandColor ?? null,
+      logoUrl: safeData.logoUrl ?? null,
+      faviconUrl: safeData.faviconUrl ?? null,
+      portalTitle: safeData.portalTitle ?? null,
+      customDomain: safeData.customDomain ?? null,
+      customCss: safeData.customCss ?? null,
+      hideBranding: safeData.hideBranding ?? false,
     },
     update: {
-      ...(data.brandColor !== undefined && { brandColor: data.brandColor }),
-      ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }),
-      ...(data.faviconUrl !== undefined && { faviconUrl: data.faviconUrl }),
-      ...(data.portalTitle !== undefined && { portalTitle: data.portalTitle }),
-      ...(data.customDomain !== undefined && { customDomain: data.customDomain }),
-      ...(data.customCss !== undefined && { customCss: data.customCss }),
-      ...(data.hideBranding !== undefined && { hideBranding: data.hideBranding }),
+      ...(safeData.brandColor !== undefined && { brandColor: safeData.brandColor }),
+      ...(safeData.logoUrl !== undefined && { logoUrl: safeData.logoUrl }),
+      ...(safeData.faviconUrl !== undefined && { faviconUrl: safeData.faviconUrl }),
+      ...(safeData.portalTitle !== undefined && { portalTitle: safeData.portalTitle }),
+      ...(safeData.customDomain !== undefined && { customDomain: safeData.customDomain }),
+      ...(safeData.customCss !== undefined && { customCss: safeData.customCss }),
+      ...(safeData.hideBranding !== undefined && { hideBranding: safeData.hideBranding }),
     },
   })
 

@@ -9,6 +9,11 @@
 
 import { getCurrentUser } from '@/lib/dal/session'
 import { listNotificationsSince } from '@/lib/dal/notifications'
+import {
+  acquireConnectionSlot,
+  releaseConnectionSlot,
+  DEFAULT_MAX_STREAMS_PER_USER,
+} from '@/lib/concurrency'
 import { NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -23,10 +28,19 @@ export async function GET(req: Request) {
     return new NextResponse('Unauthorized', { status: 401 })
   }
 
+  // Cap concurrent SSE streams per user — defends against a single user
+  // (or a small botnet of valid sessions) exhausting the connection pool
+  // and DB CPU by opening hundreds of polling streams.
+  const slotKey = `sse:user:${user.id}`
+  if (!acquireConnectionSlot(slotKey, DEFAULT_MAX_STREAMS_PER_USER)) {
+    return new NextResponse('Too many concurrent streams', {
+      status: 429,
+      headers: { 'Retry-After': '30' },
+    })
+  }
+
   const enc = new TextEncoder()
   let closed = false
-  // Per-connection cursor: the latest createdAt we've sent. Polls only fetch
-  // rows newer than this. Starts from the Last-Event-ID header or last minute.
   let lastSentAt: Date
 
   const stream = new ReadableStream({
@@ -37,7 +51,6 @@ export async function GET(req: Request) {
         controller.enqueue(enc.encode(`data: ${data}\n\n`))
       }
 
-      // Replay missed notifications since Last-Event-ID (or last minute).
       const lastEventIdHeader = req.headers.get('last-event-id')
       const timestamp = Number(lastEventIdHeader)
       lastSentAt = Number.isFinite(timestamp) && timestamp > 0
@@ -58,15 +71,13 @@ export async function GET(req: Request) {
       const poll = async () => {
         if (closed) return
         try {
-          // Re-auth check every poll: close the stream if the user's token
-          // was revoked (e.g. password reset, admin block). This prevents
-          // stale sessions from receiving notifications indefinitely.
           const currentUser = await getCurrentUser()
           if (!currentUser || currentUser.id !== user.id) {
             closed = true
             controller.enqueue(enc.encode(`event: close\ndata: session expired\n\n`))
             clearInterval(pollTimer)
             clearInterval(heartbeatTimer)
+            releaseConnectionSlot(slotKey)
             try { controller.close() } catch { /* already closed */ }
             return
           }
@@ -90,11 +101,13 @@ export async function GET(req: Request) {
         closed = true
         clearInterval(pollTimer)
         clearInterval(heartbeatTimer)
+        releaseConnectionSlot(slotKey)
         try { controller.close() } catch { /* already closed */ }
       })
     },
     cancel() {
       closed = true
+      releaseConnectionSlot(slotKey)
     },
   })
 

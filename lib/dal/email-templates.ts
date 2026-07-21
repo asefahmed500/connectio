@@ -40,6 +40,7 @@ export async function listEmailTemplates(): Promise<EmailTemplateDTO[]> {
 }
 
 export async function getEmailTemplate(key: string): Promise<EmailTemplateDTO | null> {
+  await requirePermission('settings:manage')
   const row = await prisma.emailTemplate.findUnique({ where: { key } })
   return row ? toDTO(row as unknown as Record<string, unknown>) : null
 }
@@ -74,6 +75,8 @@ export async function renderStoredTemplate(
 }
 
 export async function upsertEmailTemplate(data: {
+  /** When provided, update by id (preserves the row even if `key` changes). */
+  id?: string
   key: string
   name: string
   category?: string | null
@@ -85,28 +88,48 @@ export async function upsertEmailTemplate(data: {
 }): Promise<string> {
   const user = await requirePermission('settings:manage')
 
-  const row = await prisma.emailTemplate.upsert({
-    where: { key: data.key },
-    create: {
-      key: data.key,
-      name: data.name,
-      category: data.category ?? null,
-      subject: data.subject,
-      htmlBody: data.htmlBody ?? null,
-      textBody: data.textBody ?? null,
-      variables: data.variables ?? null,
-      isActive: data.isActive ?? true,
-    },
-    update: {
-      name: data.name,
-      category: data.category ?? null,
-      subject: data.subject,
-      htmlBody: data.htmlBody ?? null,
-      textBody: data.textBody ?? null,
-      variables: data.variables ?? null,
-      isActive: data.isActive ?? true,
-    },
-  })
+  let row: { id: string }
+  if (data.id) {
+    // Update by id — preserves the row even if the key changed. If the new
+    // key collides with another template, Prisma throws P2002 and the
+    // action surfaces a friendly error.
+    row = await prisma.emailTemplate.update({
+      where: { id: data.id },
+      data: {
+        key: data.key,
+        name: data.name,
+        category: data.category ?? null,
+        subject: data.subject,
+        htmlBody: data.htmlBody ?? null,
+        textBody: data.textBody ?? null,
+        variables: data.variables ?? null,
+        isActive: data.isActive ?? true,
+      },
+    })
+  } else {
+    row = await prisma.emailTemplate.upsert({
+      where: { key: data.key },
+      create: {
+        key: data.key,
+        name: data.name,
+        category: data.category ?? null,
+        subject: data.subject,
+        htmlBody: data.htmlBody ?? null,
+        textBody: data.textBody ?? null,
+        variables: data.variables ?? null,
+        isActive: data.isActive ?? true,
+      },
+      update: {
+        name: data.name,
+        category: data.category ?? null,
+        subject: data.subject,
+        htmlBody: data.htmlBody ?? null,
+        textBody: data.textBody ?? null,
+        variables: data.variables ?? null,
+        isActive: data.isActive ?? true,
+      },
+    })
+  }
 
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({

@@ -3,6 +3,9 @@ import { listApiKeys } from '@/lib/dal/api-keys'
 import { createKeyAction } from './actions'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { ApiKeyActions } from './api-key-actions'
 
 export const metadata = { title: 'API Keys — ClientConnect' }
@@ -12,7 +15,7 @@ export default async function ApiKeysPage() {
   const keys = await listApiKeys()
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-heading tracking-wide">API Keys</h1>
         <p className="text-sm text-muted-foreground">
@@ -48,7 +51,7 @@ export default async function ApiKeysPage() {
                   <ApiKeyActions keyId={k.id} isActive={k.isActive} />
                 </div>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-1">
+              <CardContent className="text-xs text-muted-foreground flex flex-col gap-1">
                 {k.permissions.length > 0 && (
                   <div className="flex gap-1 flex-wrap">
                     Permissions:
@@ -72,27 +75,30 @@ function CreateKeyForm() {
   return (
     <form
       action={createKeyAction}
-      className="flex gap-3 items-center"
+      className="flex flex-col sm:flex-row gap-3 sm:items-end"
     >
-      <input
-        name="name"
-        type="text"
-        required
-        placeholder="Key name"
-        className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 flex-1"
-      />
-      <input
-        name="permissions"
-        type="text"
-        placeholder="read:*"
-        className="flex h-10 w-48 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-      />
-      <button
-        type="submit"
-        className="inline-flex h-10 items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 shrink-0"
-      >
+      <Field className="flex-1">
+        <FieldLabel htmlFor="name">Key name</FieldLabel>
+        <Input
+          id="name"
+          name="name"
+          type="text"
+          required
+          placeholder="Production read-only key"
+        />
+      </Field>
+      <Field className="flex-1">
+        <FieldLabel htmlFor="permissions">Permissions (space-separated)</FieldLabel>
+        <Input
+          id="permissions"
+          name="permissions"
+          type="text"
+          placeholder="read:submissions"
+        />
+      </Field>
+      <Button type="submit" className="sm:shrink-0">
         Create key
-      </button>
+      </Button>
     </form>
   )
 }

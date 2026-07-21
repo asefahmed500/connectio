@@ -41,7 +41,10 @@ export function FileRow({
               await deleteFileAction(file.id)
               router.refresh()
             } catch (err) {
-              setError(err instanceof Error ? err.message : 'Failed to delete file')
+              // Never surface raw error to the UI (may leak storageKey or other
+              // internals). Log server-side via the action; show generic text.
+              console.error('[files] delete failed:', err)
+              setError('Failed to delete file. Please try again.')
             }
           })
         }}

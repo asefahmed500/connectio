@@ -17,7 +17,8 @@ export async function saveDraftAction(input: {
     await saveDraft(input)
     return { success: true }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : 'Save failed' }
+    console.error('[submissions] saveDraftAction failed:', err)
+    return { success: false, error: 'Could not save draft. Try again.' }
   }
 }
 
@@ -62,7 +63,8 @@ export async function submitAction(
   try {
     await submit({ clientId, formId, formData: data })
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Submit failed' }
+    console.error('[submissions] submitAction failed:', err)
+    return { error: 'Could not submit form. Try again.' }
   }
 
   const client = await prisma.client.findUniqueOrThrow({

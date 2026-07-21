@@ -1,10 +1,16 @@
 import 'server-only'
 import { cache } from 'react'
-import { createHash } from 'crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'crypto'
 import { prisma } from '@/lib/db'
 import { requirePermission } from '@/lib/auth/permissions'
 import { NotFoundError } from '@/lib/errors'
 import type { Prisma, UserRole } from '@prisma/client'
+
+/**
+ * Roles that SSO JIT provisioning and SCIM may assign.
+ * Privileged roles (SUPER_ADMIN) must never be minted via federated identity.
+ */
+export const SCIM_ALLOWED_ROLES: readonly UserRole[] = ['TEAM_MEMBER', 'CLIENT'] as const
 
 // ─────────────────────────────────────────────────────────────────────
 // SSO Provider CRUD
@@ -88,6 +94,11 @@ export async function createSsoProvider(input: {
 }): Promise<string> {
   const user = await requirePermission('sso:manage')
 
+  // Never allow SSO JIT to mint privileged roles.
+  if (input.defaultRole && !SCIM_ALLOWED_ROLES.includes(input.defaultRole)) {
+    throw new Error(`SSO default role must be one of: ${SCIM_ALLOWED_ROLES.join(', ')}`)
+  }
+
   const provider = await prisma.ssoProvider.create({
     data: {
       name: input.name,
@@ -123,7 +134,7 @@ export async function updateSsoProvider(
   input: Partial<{
     name: string
     isActive: boolean
-    spEntityId: string | null
+    spEntityId: string
     idpEntityId: string | null
     idpSsoUrl: string | null
     idpCertificate: string | null
@@ -138,7 +149,30 @@ export async function updateSsoProvider(
 ): Promise<void> {
   const user = await requirePermission('sso:manage')
 
-  await prisma.ssoProvider.update({ where: { id }, data: input as Record<string, unknown> })
+  // Enforce role allowlist. Build the Prisma update payload field-by-field so
+  // the type system catches any mismatch (no `as Record<string, unknown>`).
+  if (input.defaultRole !== undefined && !SCIM_ALLOWED_ROLES.includes(input.defaultRole)) {
+    throw new Error(`SSO default role must be one of: ${SCIM_ALLOWED_ROLES.join(', ')}`)
+  }
+
+  const data: Prisma.SsoProviderUncheckedUpdateInput = {}
+  if (input.name !== undefined) data.name = input.name
+  if (input.isActive !== undefined) data.isActive = input.isActive
+  if (input.spEntityId !== undefined) data.spEntityId = input.spEntityId
+  if (input.idpEntityId !== undefined) data.idpEntityId = input.idpEntityId
+  if (input.idpSsoUrl !== undefined) data.idpSsoUrl = input.idpSsoUrl
+  if (input.idpCertificate !== undefined) data.idpCertificate = input.idpCertificate
+  if (input.oidcIssuer !== undefined) data.oidcIssuer = input.oidcIssuer
+  if (input.oidcDiscoveryUrl !== undefined) data.oidcDiscoveryUrl = input.oidcDiscoveryUrl
+  if (input.oidcClientId !== undefined) data.oidcClientId = input.oidcClientId
+  if (input.oidcClientSecret !== undefined) data.oidcClientSecret = input.oidcClientSecret
+  if (input.jitProvisioning !== undefined) data.jitProvisioning = input.jitProvisioning
+  if (input.defaultRole !== undefined) data.defaultRole = input.defaultRole
+  if (input.attributeMapping !== undefined) {
+    data.attributeMapping = input.attributeMapping as Prisma.InputJsonValue
+  }
+
+  await prisma.ssoProvider.update({ where: { id }, data })
 
   const { writeAudit } = await import('@/lib/audit')
   await writeAudit({
@@ -257,13 +291,20 @@ export async function revokeScimApiKey(id: string): Promise<void> {
 }
 
 export async function verifyScimApiKey(token: string): Promise<boolean> {
-  const keyHash = createHash('sha256').update(token, 'utf-8').digest('hex')
+  const inputHash = createHash('sha256').update(token, 'utf-8').digest()
+  const inputHex = inputHash.toString('hex')
   const key = await prisma.scimApiKey.findFirst({
-    where: { keyHash, isActive: true },
+    where: { keyHash: inputHex, isActive: true },
   })
   if (!key) return false
 
   if (key.expiresAt && key.expiresAt < new Date()) return false
+
+  // Constant-time comparison of the stored hash against the input hash
+  // (defense-in-depth on top of the DB index lookup).
+  const storedHash = Buffer.from(key.keyHash, 'hex')
+  if (storedHash.length !== inputHash.length) return false
+  if (!timingSafeEqual(storedHash, inputHash)) return false
 
   await prisma.scimApiKey.update({
     where: { id: key.id },
@@ -273,10 +314,7 @@ export async function verifyScimApiKey(token: string): Promise<boolean> {
 }
 
 function generateApiKey(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  let result = 'cc_'
-  for (let i = 0; i < 40; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
+  // Cryptographically secure key — 30 bytes (~240 bits) of entropy, base32-encoded.
+  const raw = randomBytes(30).toString('base64url')
+  return `cc_${raw}`
 }

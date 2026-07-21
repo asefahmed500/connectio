@@ -1,5 +1,6 @@
 import { requireRole, getCurrentUser } from '@/lib/dal/session'
 import { getSystemOverview } from '@/lib/dal/analytics'
+import { getAllSettings } from '@/lib/dal/settings'
 import { GeneralSettingsForm } from './general-settings-form'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
@@ -10,7 +11,10 @@ export default async function AdminSettingsPage() {
   const user = await getCurrentUser()
   if (!user) return null
 
-  const stats = await getSystemOverview()
+  const [stats, settings] = await Promise.all([
+    getSystemOverview(),
+    getAllSettings(),
+  ])
 
   const smtpConfigured = !!(process.env.SMTP_HOST && process.env.SMTP_USER)
   const r2Configured = !!(process.env.R2_ACCOUNT_ID && process.env.R2_BUCKET_NAME)
@@ -19,7 +23,7 @@ export default async function AdminSettingsPage() {
   const redisConfigured = !!(process.env.UPSTASH_REDIS_REST_URL)
 
   return (
-    <div className="flex flex-col gap-6 max-w-3xl">
+    <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-3xl font-heading tracking-wide">Settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -72,7 +76,7 @@ export default async function AdminSettingsPage() {
         </CardContent>
       </Card>
 
-      <GeneralSettingsForm />
+      <GeneralSettingsForm settings={settings} />
 
       <Card>
         <CardHeader>
@@ -86,8 +90,10 @@ export default async function AdminSettingsPage() {
             <FeatureDot label="Email delivery" done={smtpConfigured} />
             <FeatureDot label="Soft deletes" done />
             <FeatureDot label="Audit logging" done />
-            <FeatureDot label="2FA" done={false} />
-            <FeatureDot label="SSO / OAuth" done={false} />
+            <FeatureDot label="2FA" done />
+            <FeatureDot label="SSO / OAuth" done />
+            <FeatureDot label="SCIM provisioning" done />
+            <FeatureDot label="GDPR erasure" done />
           </div>
         </CardContent>
       </Card>

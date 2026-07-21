@@ -29,6 +29,8 @@ import {
   Gauge,
   Key,
   Search,
+  MessageSquare,
+  MonitorSmartphone,
 } from 'lucide-react'
 
 const PAGES = [
@@ -38,6 +40,8 @@ const PAGES = [
   { href: '/admin/clients', label: 'Clients', icon: Building2, keywords: 'companies customers' },
   { href: '/admin/forms', label: 'Forms', icon: FileText, keywords: 'templates fields schema' },
   { href: '/admin/team', label: 'Team', icon: UsersRound, keywords: 'staff employees' },
+  { href: '/admin/comments', label: 'Comments', icon: MessageSquare, keywords: 'messages moderation chat' },
+  { href: '/admin/sessions', label: 'Active Sessions', icon: MonitorSmartphone, keywords: 'login devices logout revoke' },
   { href: '/admin/notifications', label: 'Notifications', icon: Bell, keywords: 'alerts updates' },
   { href: '/admin/audit-log', label: 'Audit Log', icon: ScrollText, keywords: 'history changes activity' },
   { href: '/admin/audit-log/chain', label: 'Audit Chain', icon: ShieldCheck, keywords: 'integrity verify hash tamper' },
@@ -50,7 +54,7 @@ const PAGES = [
   { href: '/admin/rate-limits', label: 'Rate Limits', icon: Gauge, keywords: 'rate limit throttle abuse' },
   { href: '/admin/api-keys', label: 'API Keys', icon: Key, keywords: 'api token integration programmatic' },
   { href: '/admin/sso', label: 'SSO', icon: Fingerprint, keywords: 'single sign on saml oidc identity' },
-  { href: '/admin/settings', label: 'Settings', icon: Settings, keywords: 'config configuration' },
+  { href: '/admin/settings', label: 'Settings', icon: Settings, keywords: 'config configuration maintenance' },
 ]
 
 export function CommandPalette() {

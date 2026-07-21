@@ -1,5 +1,10 @@
 import { getCurrentUser } from '@/lib/dal/session'
 import { listCommentsSince } from '@/lib/dal/comments'
+import {
+  acquireConnectionSlot,
+  releaseConnectionSlot,
+  DEFAULT_MAX_STREAMS_PER_USER,
+} from '@/lib/concurrency'
 import { NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
@@ -17,6 +22,16 @@ export async function GET(req: Request) {
     const clientId = url.searchParams.get('clientId')
     const submissionId = url.searchParams.get('submissionId') || undefined
     if (!clientId) return NextResponse.json({ error: 'Missing clientId' }, { status: 400 })
+
+    // Per-user SSE cap — comments stream polls the DB every 3s, so uncapped
+    // concurrent streams are a cheap DoS primitive.
+    const slotKey = `sse:user:${user.id}`
+    if (!acquireConnectionSlot(slotKey, DEFAULT_MAX_STREAMS_PER_USER)) {
+      return new NextResponse('Too many concurrent streams', {
+        status: 429,
+        headers: { 'Retry-After': '30' },
+      })
+    }
 
     const enc = new TextEncoder()
     let closed = false
@@ -43,6 +58,9 @@ export async function GET(req: Request) {
             if (!currentUser || currentUser.id !== user.id) {
               closed = true
               controller.enqueue(enc.encode(`event: close\ndata: session expired\n\n`))
+              clearInterval(pollTimer)
+              clearInterval(heartbeatTimer)
+              releaseConnectionSlot(slotKey)
               try { controller.close() } catch { /* already closed */ }
               return
             }
@@ -66,10 +84,14 @@ export async function GET(req: Request) {
           closed = true
           clearInterval(pollTimer)
           clearInterval(heartbeatTimer)
+          releaseConnectionSlot(slotKey)
           try { controller.close() } catch { /* already closed */ }
         })
       },
-      cancel() { closed = true },
+      cancel() {
+        closed = true
+        releaseConnectionSlot(slotKey)
+      },
     })
 
     return new Response(stream, {

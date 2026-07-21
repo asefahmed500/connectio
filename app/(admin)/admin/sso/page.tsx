@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requireRole } from '@/lib/dal/session'
 import { listSsoProviders, listScimApiKeys } from '@/lib/dal/sso'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { SsoProviderActions } from './sso-provider-actions'
 import { ScimApiKeysSection } from './scim-keys'
@@ -15,7 +16,7 @@ export default async function AdminSsoPage() {
   const scimKeys = await listScimApiKeys()
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-heading tracking-wide">SSO / SCIM</h1>
@@ -23,12 +24,9 @@ export default async function AdminSsoPage() {
             Configure single sign-on and SCIM provisioning.
           </p>
         </div>
-        <Link
-          href="/admin/sso/new"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Add provider
-        </Link>
+        <Button asChild>
+          <Link href="/admin/sso/new">Add provider</Link>
+        </Button>
       </div>
 
       {providers.length === 0 ? (
@@ -75,12 +73,13 @@ export default async function AdminSsoPage() {
 
                 {p.userCount === 0 && (
                   <div className="flex items-center gap-2 mt-3">
-                    <Link
-                      href={`/admin/sso/${p.id}/metadata`}
+                    <a
+                      href={`/api/auth/sso/${p.id}/metadata`}
+                      download
                       className="text-xs text-primary hover:underline"
                     >
                       Download SP metadata
-                    </Link>
+                    </a>
                   </div>
                 )}
               </CardContent>

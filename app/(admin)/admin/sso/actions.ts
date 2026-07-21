@@ -38,7 +38,7 @@ export async function updateSsoAction(
   await updateSsoProvider(providerId, {
     name: raw.name as string,
     isActive: raw.isActive === 'on',
-    spEntityId: (raw.spEntityId as string) || null,
+    spEntityId: (raw.spEntityId as string) || 'urn:connectio:sso',
     idpEntityId: (raw.idpEntityId as string) || null,
     idpSsoUrl: (raw.idpSsoUrl as string) || null,
     idpCertificate: (raw.idpCertificate as string) || null,

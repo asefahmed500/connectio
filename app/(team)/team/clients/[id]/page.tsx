@@ -24,7 +24,7 @@ export default async function TeamClientDetailPage({
   const client = await getClientDTO(id)
   if (!client) notFound()
 
-  const submissions = await listSubmissionsWithSchema(id)
+  const submissions = await listSubmissionsWithSchema(id, { page: 1, pageSize: 20 })
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,11 +38,11 @@ export default async function TeamClientDetailPage({
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="p-3 pb-1">
             <CardDescription>Submissions</CardDescription>
-            <CardTitle className="text-2xl tabular-nums">{submissions.length}</CardTitle>
+            <CardTitle className="text-2xl tabular-nums">{submissions.total}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -61,11 +61,11 @@ export default async function TeamClientDetailPage({
 
       <div>
         <h2 className="text-lg font-heading tracking-wide mb-3">Submissions</h2>
-        {submissions.length === 0 ? (
+        {submissions.items.length === 0 ? (
           <p className="text-sm text-muted-foreground">No submissions yet.</p>
         ) : (
           <div className="flex flex-col gap-3">
-            {submissions.map((s) => {
+            {submissions.items.map((s) => {
               const schema = parseFormSchema(s.formSchema as unknown)
               return (
                 <Card key={s.id}>

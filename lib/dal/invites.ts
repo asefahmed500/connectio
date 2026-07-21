@@ -109,7 +109,9 @@ export async function createInvite(
   input: CreateInviteInput & { createdBy: string }
 ): Promise<{ id: string; slug: string }> {
   const slug = await proposeSlug(input)
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+  const { getNumberSetting } = await import('@/lib/dal/settings')
+  const ttlDays = await getNumberSetting('inviteTtlDays')
+  const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000)
 
   const invite = await prisma.invite.create({
     data: {

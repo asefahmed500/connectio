@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requirePermission } from '@/lib/auth/permissions'
 import { listEmailTemplates } from '@/lib/dal/email-templates'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { EmailTemplateActions } from './template-actions'
 
@@ -12,7 +13,7 @@ export default async function EmailTemplatesPage() {
   const templates = await listEmailTemplates()
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-heading tracking-wide">Email templates</h1>
@@ -20,12 +21,9 @@ export default async function EmailTemplatesPage() {
             Customize transactional email content.
           </p>
         </div>
-        <Link
-          href="/admin/email-templates/new"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          New template
-        </Link>
+        <Button asChild>
+          <Link href="/admin/email-templates/new">New template</Link>
+        </Button>
       </div>
 
       {templates.length === 0 ? (
@@ -48,7 +46,7 @@ export default async function EmailTemplatesPage() {
                   <EmailTemplateActions templateId={t.id} />
                 </div>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-1">
+              <CardContent className="text-xs text-muted-foreground flex flex-col gap-1">
                 <div className="font-mono truncate">{t.subject}</div>
                 {t.variables && (
                   <div>Variables: <code>{t.variables}</code></div>

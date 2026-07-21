@@ -50,7 +50,7 @@ export function UserEditForm({ user }: { user: { id: string; name: string; email
             </select>
           </Field>
           {state && 'error' in state && <p className="text-sm text-destructive" role="alert">{state.error}</p>}
-          {state && 'success' in state && !state.password && (
+          {state && 'success' in state && (
             <p className="text-sm text-emerald-700">User updated successfully.</p>
           )}
           <Button type="submit" disabled={pending}>

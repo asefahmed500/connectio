@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireClientAccess, getCurrentUser } from '@/lib/dal/session'
+import { checkSameOrigin } from '@/lib/auth/csrf'
 import { getStorage } from '@/lib/storage'
 import {
   MAX_UPLOAD_BYTES,
@@ -20,6 +21,9 @@ import { generateCuid } from '@/lib/cuid'
 export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
+  if (!checkSameOrigin(req.headers)) {
+    return NextResponse.json({ error: 'CSRF check failed' }, { status: 403 })
+  }
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -151,7 +155,6 @@ export async function POST(req: Request) {
   return NextResponse.json(
     {
       id: created.id,
-      storageKey: created.storageKey,
       originalName: created.originalName,
       mimeType: created.mimeType,
       size: created.size.toString(),

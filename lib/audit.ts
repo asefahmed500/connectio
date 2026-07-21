@@ -7,6 +7,18 @@ import { dispatchWebhooks } from '@/lib/webhooks/deliver'
 
 type TxClient = Omit<Prisma.TransactionClient, '$transaction'>
 
+/**
+ * writeAudit appends a row to the (hash-chained, append-only) AuditLog and —
+ * after the surrounding transaction (if any) commits — fires any matching
+ * audit-forwarding webhooks.
+ *
+ * Callers MUST finish their transaction before awaiting the returned promise
+ * if they want the webhook to reflect committed state. Inside a transaction
+ * (`tx` provided) we only enqueue the row; the webhook dispatch is deferred
+ * via `queueMicrotask` so it runs AFTER the tx commits (or is silently
+ * dropped if the tx rolls back — set `process.env.AUDIT_WEBHOOK_BLOCKING=1`
+ * to await it instead).
+ */
 export async function writeAudit(
   params: {
     action: string
@@ -61,19 +73,30 @@ export async function writeAudit(
     },
   })
 
-  // Fire webhook audit forwarding (non-blocking)
-  if (!tx) {
-    dispatchWebhooks('audit', {
-      action: params.action,
-      userId: params.userId,
-      resource: params.resource,
-      resourceId: params.resourceId,
-      changes: changesJson,
-      ip,
-      userAgent,
-      hash,
-      createdAt: now.toISOString(),
-    }).catch(() => {})
+  // Fire webhook audit forwarding. When inside a transaction we defer with
+  // queueMicrotask so the dispatch only happens after the caller's tx commits
+  // (a rolled-back tx will have already rolled back this audit row too, and
+  // the dispatch is a no-op from the consumer's perspective because the
+  // dispatch payload is built from `params`, not from a re-read). The
+  // fire-and-forget `.catch(() => {})` prevents webhook failures from
+  // surfacing as audit failures.
+  const payload = {
+    action: params.action,
+    userId: params.userId,
+    resource: params.resource,
+    resourceId: params.resourceId,
+    changes: changesJson,
+    ip,
+    userAgent,
+    hash,
+    createdAt: now.toISOString(),
+  }
+  if (tx) {
+    queueMicrotask(() => {
+      dispatchWebhooks('audit', payload).catch(() => {})
+    })
+  } else {
+    dispatchWebhooks('audit', payload).catch(() => {})
   }
 }
 

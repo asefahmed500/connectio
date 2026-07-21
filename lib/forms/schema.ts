@@ -14,6 +14,10 @@ export const FIELD_TYPES = [
   'multiselect',
   'radio',
   'checkbox',
+  'date',
+  'datetime',
+  'file',
+  'heading',
 ] as const
 
 export type FieldType = (typeof FIELD_TYPES)[number]

@@ -10,8 +10,10 @@ import { registerAction, type RegisterState } from './actions'
 
 export function RegisterForm({
   invite,
+  minLength = 12,
 }: {
   invite: { slug: string; email: string; companyName: string; contactName: string }
+  minLength?: number
 }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerAction, undefined)
 
@@ -68,9 +70,9 @@ export function RegisterForm({
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" required minLength={12} />
+        <Input id="password" name="password" type="password" required minLength={minLength} />
         <p className="text-xs text-muted-foreground">
-          At least 12 characters, including a letter, number, and symbol.
+          At least {minLength} characters, including a letter, number, and symbol.
         </p>
       </div>
 
@@ -88,7 +90,7 @@ export function RegisterForm({
       )}
 
       <Button type="submit" disabled={pending} className="w-full">
-        {pending ? 'Creating your account&#8230;' : 'Create account'}
+        {pending ? 'Creating your account…' : 'Create account'}
       </Button>
     </form>
   )

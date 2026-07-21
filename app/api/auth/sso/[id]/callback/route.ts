@@ -1,11 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
+import { randomBytes, randomUUID } from 'crypto'
+import { createRemoteJWKSet, jwtVerify, errors as joseErrors } from 'jose'
 import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth/password'
 import { signAccessToken, generateRefreshToken, hashRefreshToken } from '@/lib/auth/tokens'
-import { NotFoundError } from '@/lib/errors'
+import { dashboardForRole } from '@/lib/auth/session'
+import { SCIM_ALLOWED_ROLES } from '@/lib/dal/sso'
 import { rateLimit } from '@/lib/ratelimit'
+import { NotFoundError } from '@/lib/errors'
+import type { UserRole } from '@prisma/client'
 
 // GET /api/auth/sso/:id/callback — OIDC callback (IdP redirects here)
+//
+// SECURITY: the id_token returned by the IdP is fully verified:
+//   - signature against the IdP JWKS (no alg confusion, no alg=none)
+//   - iss matches provider.oidcIssuer
+//   - aud matches provider.oidcClientId
+//   - exp not expired
+//   - email claim present
+// AND `state` is round-trip-verified against the cookie set by /initiate.
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -42,20 +56,24 @@ export async function GET(
     return NextResponse.json({ error: 'Missing code or state' }, { status: 400 })
   }
 
-  // Exchange authorization code for tokens using the OIDC provider
+  // STATE CSRF CHECK: the cookie must equal the query param.
+  const cs = await cookies()
+  const cookieState = cs.get(`sso_state_${id}`)?.value
+  cs.delete(`sso_state_${id}`)
+  if (!cookieState || cookieState !== state) {
+    return NextResponse.json({ error: 'Invalid state parameter' }, { status: 400 })
+  }
+
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
   const redirectUri = `${baseUrl}/api/auth/sso/${id}/callback`
 
-  // We attempt to exchange the code for an ID token by calling the token endpoint
-  // Derived from the OIDC discovery URL
-  const tokenEndpoint = await discoverTokenEndpoint(provider.oidcDiscoveryUrl)
-
-  if (!tokenEndpoint) {
-    return NextResponse.json({ error: 'Could not discover token endpoint' }, { status: 500 })
+  const discovery = await fetchDiscovery(provider.oidcDiscoveryUrl)
+  if (!discovery) {
+    return NextResponse.json({ error: 'Could not discover OIDC endpoints' }, { status: 500 })
   }
 
   try {
-    const tokenResponse = await fetch(tokenEndpoint, {
+    const tokenResponse = await fetch(discovery.token_endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -65,6 +83,7 @@ export async function GET(
         client_id: provider.oidcClientId ?? '',
         client_secret: provider.oidcClientSecret ?? '',
       }),
+      signal: AbortSignal.timeout(10000),
     })
 
     if (!tokenResponse.ok) {
@@ -73,20 +92,32 @@ export async function GET(
       return NextResponse.redirect(new URL('/login?error=sso_failed', req.url))
     }
 
-    const tokens = await tokenResponse.json()
-    const idToken = tokens.id_token as string | undefined
-
+    const tokens = (await tokenResponse.json()) as { id_token?: string }
+    const idToken = tokens.id_token
     if (!idToken) {
       return NextResponse.json({ error: 'No id_token in response' }, { status: 400 })
     }
 
-    // Decode the JWT (without verification for initial implementation)
-    // In production, verify against the IdP's JWKS
-    const payload = decodeJwtPayload(idToken)
-    const email = payload?.email as string | undefined
+    // VERIFY THE id_token SIGNATURE against the IdP JWKS, plus iss/aud/exp.
+    const expectedIssuer = provider.oidcIssuer ?? discovery.issuer
+    const expectedAudience = provider.oidcClientId ?? ''
+    const jwks = createRemoteJWKSet(new URL(discovery.jwks_uri))
+    let payload
+    try {
+      ;({ payload } = await jwtVerify(idToken, jwks, {
+        issuer: expectedIssuer,
+        audience: expectedAudience,
+        algorithms: ['RS256', 'ES256', 'RS384', 'ES384', 'PS256'],
+        clockTolerance: 60,
+      }))
+    } catch (err) {
+      console.warn('[SSO] id_token verification failed:', err instanceof Error ? err.message : err)
+      return NextResponse.redirect(new URL('/login?error=sso_invalid_token', req.url))
+    }
 
+    const email = (payload.email as string | undefined)?.toLowerCase()
     if (!email) {
-      return NextResponse.json({ error: 'ID token missing email' }, { status: 400 })
+      return NextResponse.redirect(new URL('/login?error=sso_no_email', req.url))
     }
 
     return handleSsoLogin(provider, email, req)
@@ -96,31 +127,36 @@ export async function GET(
   }
 }
 
-async function discoverTokenEndpoint(discoveryUrl: string | null): Promise<string | null> {
+async function fetchDiscovery(
+  discoveryUrl: string | null,
+): Promise<{ token_endpoint: string; jwks_uri: string; issuer: string } | null> {
   if (!discoveryUrl) return null
-
   try {
     const resp = await fetch(discoveryUrl, { signal: AbortSignal.timeout(5000) })
     if (!resp.ok) return null
-    const config = await resp.json()
-    return config.token_endpoint as string
-  } catch {
-    return null
-  }
-}
-
-function decodeJwtPayload(jwt: string): Record<string, unknown> | null {
-  try {
-    const parts = jwt.split('.')
-    if (parts.length !== 3) return null
-    return JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf-8'))
+    const config = (await resp.json()) as {
+      token_endpoint?: string
+      jwks_uri?: string
+      issuer?: string
+    }
+    if (!config.token_endpoint || !config.jwks_uri) return null
+    return {
+      token_endpoint: config.token_endpoint,
+      jwks_uri: config.jwks_uri,
+      issuer: config.issuer ?? '',
+    }
   } catch {
     return null
   }
 }
 
 async function handleSsoLogin(
-  provider: { id: string; jitProvisioning: boolean; defaultRole: string; name: string },
+  provider: {
+    id: string
+    jitProvisioning: boolean
+    defaultRole: string
+    name: string
+  },
   email: string,
   req: NextRequest,
 ) {
@@ -131,13 +167,17 @@ async function handleSsoLogin(
       return NextResponse.redirect(new URL('/login?error=not_found', req.url))
     }
 
+    const role: UserRole = (SCIM_ALLOWED_ROLES as readonly string[]).includes(provider.defaultRole)
+      ? (provider.defaultRole as UserRole)
+      : 'TEAM_MEMBER'
+
     const tempPassword = generatePassword()
     user = await prisma.user.create({
       data: {
         email: email.toLowerCase(),
         name: email.split('@')[0] ?? email,
         passwordHash: await hashPassword(tempPassword),
-        role: provider.defaultRole as import('@prisma/client').UserRole,
+        role,
         ssoProviderId: provider.id,
       },
     })
@@ -145,7 +185,7 @@ async function handleSsoLogin(
 
   const accessToken = await signAccessToken({
     sub: user.id,
-    role: user.role as import('@prisma/client').UserRole,
+    role: user.role as UserRole,
     tokenVersion: user.tokenVersion,
   })
   const refreshToken = generateRefreshToken()
@@ -159,7 +199,18 @@ async function handleSsoLogin(
     },
   })
 
-  const response = NextResponse.redirect(new URL('/dashboard', req.url))
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
+
+  const { writeAudit } = await import('@/lib/audit')
+  await writeAudit({
+    action: 'SSO_LOGIN_SUCCESS',
+    userId: user.id,
+    resource: 'SsoProvider',
+    resourceId: provider.id,
+  })
+
+  const dest = dashboardForRole(user.role as UserRole, undefined)
+  const response = NextResponse.redirect(new URL(dest, req.url))
   response.cookies.set('access_token', accessToken, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -175,16 +226,29 @@ async function handleSsoLogin(
     maxAge: 7 * 24 * 60 * 60,
   })
 
-  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
-
   return response
 }
 
 function generatePassword(): string {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
-  let result = ''
-  for (let i = 0; i < 24; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
-  }
-  return result
+  return randomBytes(18).toString('base64url')
 }
+
+// Exported for the OIDC initiator to use the same cookie name convention.
+export const ssoStateCookieName = (id: string) => `sso_state_${id}` as const
+
+// Utility used by initiator (kept here to keep the state-cookie contract in one file).
+export function newSsoState(): string {
+  return randomUUID()
+}
+
+export function newPkceVerifier(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+export async function pkceChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  return Buffer.from(digest).toString('base64url').replace(/=/g, '')
+}
+
+// Re-export jose errors for initiator / tests
+export { joseErrors }

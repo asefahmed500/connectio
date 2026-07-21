@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { requirePermission } from '@/lib/auth/permissions'
 import { listWebhooks } from '@/lib/dal/webhooks'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { WebhookActions } from './webhook-actions'
 
@@ -13,7 +14,7 @@ export default async function AdminWebhooksPage() {
   const webhooks = await listWebhooks()
 
   return (
-    <div className="flex flex-col gap-6 max-w-4xl">
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-heading tracking-wide">Webhooks</h1>
@@ -21,12 +22,9 @@ export default async function AdminWebhooksPage() {
             Forward audit events and notifications to external endpoints.
           </p>
         </div>
-        <Link
-          href="/admin/webhooks/new"
-          className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          Add webhook
-        </Link>
+        <Button asChild>
+          <Link href="/admin/webhooks/new">Add webhook</Link>
+        </Button>
       </div>
 
       {webhooks.length === 0 ? (
@@ -60,7 +58,7 @@ export default async function AdminWebhooksPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="text-xs text-muted-foreground space-y-1">
+              <CardContent className="text-xs text-muted-foreground flex flex-col gap-1">
                 <div className="font-mono truncate">{w.url}</div>
                 <div>
                   {w.deliveryCount} delivery(ies)

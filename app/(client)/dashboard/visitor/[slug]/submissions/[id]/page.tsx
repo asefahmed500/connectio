@@ -29,7 +29,7 @@ export default async function SubmissionPage({
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{form.title}</h1>
+        <h1 className="text-3xl font-heading tracking-wide">{form.title}</h1>
         {form.description && (
           <p className="text-sm text-muted-foreground mt-1">{form.description}</p>
         )}

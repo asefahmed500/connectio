@@ -3,8 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { requireRole } from '@/lib/dal/session'
-import { createTeamMember } from '@/lib/dal/team'
-import { prisma } from '@/lib/db'
+import { createTeamMember, checkEmailTaken } from '@/lib/dal/team'
 
 const Schema = z.object({
   name: z.string().min(1).max(120),
@@ -41,14 +40,13 @@ export async function addTeamMemberAction(
   }
 
   try {
-    const existing = await prisma.user.findUnique({
-      where: { email: parsed.data.email.toLowerCase() },
-    })
+    const existing = await checkEmailTaken(parsed.data.email)
     if (existing) return { error: 'An account with this email already exists.' }
 
     await createTeamMember(parsed.data)
   } catch (err) {
-    return { error: err instanceof Error ? err.message : 'Failed to create team member' }
+    console.error('[team] addTeamMemberAction failed:', err)
+    return { error: 'Could not create team member. Try again.' }
   }
 
   revalidatePath('/admin/team')

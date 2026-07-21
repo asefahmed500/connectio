@@ -3,13 +3,16 @@
 import { useState } from 'react'
 import { createScimKeyAction, revokeScimKeyAction } from './actions'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { KeyRound, Copy, Trash2, Plus } from 'lucide-react'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { KeyRound, Copy, Trash2, Plus, Check } from 'lucide-react'
 import type { ScimApiKeyDTO } from '@/lib/dal/sso'
 
 export function ScimApiKeysSection({ keys }: { keys: ScimApiKeyDTO[] }) {
   const [newKey, setNewKey] = useState<{ key: string; name: string } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   return (
     <Card>
@@ -26,24 +29,32 @@ export function ScimApiKeysSection({ keys }: { keys: ScimApiKeyDTO[] }) {
       </CardHeader>
       <CardContent>
         {newKey && (
-          <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm dark:border-green-800 dark:bg-green-950">
-            <p className="font-medium text-green-800 dark:text-green-200">API key created</p>
-            <p className="mt-1 text-xs text-green-700 dark:text-green-300">
-              Copy this now. You won&apos;t see it again.
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="flex-1 rounded bg-green-100 px-2 py-1 text-xs dark:bg-green-900">
-                {newKey.key}
-              </code>
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={() => navigator.clipboard.writeText(newKey.key)}
-              >
-                <Copy className="w-3 h-3" />
-              </Button>
-            </div>
-          </div>
+          <Alert className="mb-4 border-emerald-500/40 bg-emerald-500/5">
+            <Check className="h-4 w-4 text-emerald-600" />
+            <AlertTitle>API key created</AlertTitle>
+            <AlertDescription>
+              <p>Copy this now. You won&apos;t see it again.</p>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="flex-1 rounded bg-muted px-2 py-1 text-xs font-mono break-all">
+                  {newKey.key}
+                </code>
+                <Button
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Copy API key"
+                  onClick={() => {
+                    navigator.clipboard.writeText(newKey.key)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 1500)
+                  }}
+                >
+                  {copied
+                    ? <Check className="w-3 h-3 text-emerald-600" />
+                    : <Copy className="w-3 h-3" />}
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
         )}
 
         {keys.length === 0 ? (
@@ -51,30 +62,29 @@ export function ScimApiKeysSection({ keys }: { keys: ScimApiKeyDTO[] }) {
         ) : (
           <div className="flex flex-col gap-2">
             {keys.map((k) => (
-              <div
-                key={k.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <KeyRound className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <span className="font-medium">{k.name}</span>
-                    <code className="ml-2 text-xs text-muted-foreground">{k.prefix}...</code>
+              <Card key={k.id}>
+                <CardContent className="p-3 flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <KeyRound className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <span className="font-medium">{k.name}</span>
+                      <code className="ml-2 text-xs text-muted-foreground">{k.prefix}...</code>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={k.isActive ? 'default' : 'secondary'}>
-                    {k.isActive ? 'Active' : 'Revoked'}
-                  </Badge>
-                  {k.isActive && (
-                    <form action={revokeScimKeyAction.bind(null, k.id)}>
-                      <Button variant="ghost" size="icon-sm" type="submit">
-                        <Trash2 className="w-3 h-3 text-destructive" />
-                      </Button>
-                    </form>
-                  )}
-                </div>
-              </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant={k.isActive ? 'default' : 'secondary'}>
+                      {k.isActive ? 'Active' : 'Revoked'}
+                    </Badge>
+                    {k.isActive && (
+                      <form action={revokeScimKeyAction.bind(null, k.id)}>
+                        <Button variant="ghost" size="icon-sm" type="submit" aria-label={`Revoke key ${k.name}`}>
+                          <Trash2 className="w-3 h-3 text-destructive" />
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
@@ -89,7 +99,7 @@ function ScimCreateForm({ onCreated }: { onCreated: (v: { key: string; name: str
   if (!open) {
     return (
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Plus className="w-3 h-3 mr-1" />
+        <Plus className="w-3 h-3" data-icon="inline-start" />
         New key
       </Button>
     )
@@ -104,14 +114,18 @@ function ScimCreateForm({ onCreated }: { onCreated: (v: { key: string; name: str
           setOpen(false)
         }
       }}
-      className="flex items-center gap-2"
+      className="flex flex-col sm:flex-row sm:items-end gap-2"
     >
-      <input
-        name="name"
-        placeholder="Key name"
-        required
-        className="h-8 rounded-md border px-2 text-xs"
-      />
+      <div className="flex flex-col gap-1">
+        <label htmlFor="scim-key-name" className="text-xs text-muted-foreground">Key name</label>
+        <Input
+          id="scim-key-name"
+          name="name"
+          placeholder="Okta SCIM"
+          required
+          className="h-8 text-xs"
+        />
+      </div>
       <Button type="submit" size="sm">
         Create
       </Button>

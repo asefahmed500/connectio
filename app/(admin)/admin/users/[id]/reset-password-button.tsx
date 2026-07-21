@@ -1,6 +1,5 @@
 'use client'
 
-import { useTransition } from 'react'
 import { Button } from '@/components/ui/button'
 import { adminResetPasswordAction, type UserActionState } from '../actions'
 import { useActionState } from 'react'
@@ -18,12 +17,14 @@ export function ResetPasswordButton({ userId, userName }: { userId: string; user
         <Key data-icon="inline-start" />
         {pending ? 'Resetting…' : `Reset password`}
       </Button>
-      {state && 'success' in state && state.password && (
+      {state && 'success' in state && (
+        // The plaintext password is no longer shown in the UI — the user
+        // receives a 6-digit OTP by email and picks their own password via
+        // /reset-password. (Previously: returned + displayed in cleartext.)
         <div className="mt-2 text-sm bg-muted/50 rounded p-3">
-          <span className="font-medium text-emerald-700">Password reset.</span>{' '}
-          New password: <code className="font-mono text-xs bg-muted px-1 rounded">{state.password}</code>
-          <br />
-          <span className="text-xs text-muted-foreground">An email has been sent to {userName}.</span>
+          <span className="font-medium text-emerald-700">Password reset initiated.</span>{' '}
+          A verification code has been emailed to {userName}. They can choose a new password
+          at the reset page.
         </div>
       )}
       {state && 'error' in state && (

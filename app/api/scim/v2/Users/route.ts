@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { verifyScimApiKey } from '@/lib/dal/sso'
 import {
   scimListUsers,
@@ -7,9 +8,9 @@ import {
   scimUpdateUser,
   scimPatchUser,
   scimDeleteUser,
+  ScimValidationError,
 } from '@/lib/dal/scim'
 import type { ScimErrorResponse } from '@/lib/dal/scim'
-import type { UserRole } from '@prisma/client'
 
 async function requireScimAuth(req: NextRequest): Promise<boolean> {
   const auth = req.headers.get('authorization') ?? ''
@@ -24,6 +25,24 @@ function error(status: number, detail: string, scimType?: string): NextResponse<
     { status },
   )
 }
+
+const CreateSchema = z.object({
+  schemas: z.array(z.string()).optional(),
+  userName: z.email(),
+  name: z.object({ givenName: z.string().optional(), familyName: z.string().optional() }).optional(),
+  active: z.boolean().optional(),
+  password: z.string().optional(),
+  roles: z.array(z.object({ value: z.string() })).optional(),
+})
+
+const UpdateSchema = z.object({
+  schemas: z.array(z.string()).optional(),
+  userName: z.email().optional(),
+  name: z.object({ givenName: z.string().optional(), familyName: z.string().optional() }).optional(),
+  active: z.boolean().optional(),
+  password: z.string().optional(),
+  roles: z.array(z.object({ value: z.string() })).optional(),
+})
 
 export async function GET(req: NextRequest) {
   if (!(await requireScimAuth(req))) {
@@ -46,7 +65,7 @@ export async function GET(req: NextRequest) {
   }
 
   const startIndex = parseInt(url.searchParams.get('startIndex') ?? '1', 10)
-  const count = parseInt(url.searchParams.get('count') ?? '100', 10)
+  const count = Math.min(parseInt(url.searchParams.get('count') ?? '100', 10), 200)
   const filter = url.searchParams.get('filter') ?? undefined
 
   const result = await scimListUsers(startIndex, count, filter)
@@ -58,22 +77,30 @@ export async function POST(req: NextRequest) {
     return error(401, 'Invalid or missing SCIM bearer token')
   }
 
+  let body: unknown
   try {
-    const body = await req.json()
+    body = await req.json()
+  } catch {
+    return error(400, 'Invalid JSON body')
+  }
 
-    if (body.schemas?.[0] !== 'urn:ietf:params:scim:schemas:core:2.0:User') {
-      return error(400, 'Invalid schema')
-    }
+  const parsed = CreateSchema.safeParse(body)
+  if (!parsed.success) {
+    return error(400, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '))
+  }
 
+  try {
     const user = await scimCreateUser({
-      userName: body.userName,
-      givenName: body.name?.givenName,
-      familyName: body.name?.familyName,
-      active: body.active,
-      role: body.roles?.[0]?.value as UserRole | undefined,
+      userName: parsed.data.userName,
+      givenName: parsed.data.name?.givenName,
+      familyName: parsed.data.name?.familyName,
+      active: parsed.data.active,
+      password: parsed.data.password,
+      // scimCreateUser validates against the SCIM allowlist internally and
+      // throws ScimValidationError if the role is disallowed.
+      role: parsed.data.roles?.[0]?.value as unknown as Parameters<typeof scimCreateUser>[0]['role'],
     })
 
-    // Audit the SCIM provisioning
     const { writeAudit } = await import('@/lib/audit')
     await writeAudit({
       action: 'SCIM_USER_PROVISIONED',
@@ -84,8 +111,14 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(user, { status: 201 })
   } catch (err) {
+    if (err instanceof ScimValidationError) {
+      return error(400, err.message)
+    }
+    // Prisma unique-constraint violation → 409, everything else → 500
+    const code = (err as { code?: string }).code
+    if (code === 'P2002') return error(409, 'User already exists', 'uniqueness')
     console.error('[SCIM] Failed to create user:', err)
-    return error(409, 'User may already exist or invalid data', 'uniqueness')
+    return error(500, 'Create failed')
   }
 }
 
@@ -97,69 +130,41 @@ export async function PUT(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get('filter')?.match(/id\s+eq\s+"([^"]+)"/i)?.[1]
   if (!userId) return error(400, 'User ID required')
 
+  let body: unknown
   try {
-    const body = await req.json()
+    body = await req.json()
+  } catch {
+    return error(400, 'Invalid JSON body')
+  }
+
+  const parsed = UpdateSchema.safeParse(body)
+  if (!parsed.success) {
+    return error(400, parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '))
+  }
+
+  try {
     const user = await scimUpdateUser(userId, {
-      userName: body.userName,
-      givenName: body.name?.givenName,
-      familyName: body.name?.familyName,
-      active: body.active,
-      role: body.roles?.[0]?.value as UserRole | undefined,
+      userName: parsed.data.userName,
+      givenName: parsed.data.name?.givenName,
+      familyName: parsed.data.name?.familyName,
+      active: parsed.data.active,
+      role: parsed.data.roles?.[0]?.value as unknown as Parameters<typeof scimUpdateUser>[1]['role'],
     })
 
     if (!user) return error(404, 'User not found')
     return NextResponse.json(user)
-  } catch {
+  } catch (err) {
+    if (err instanceof ScimValidationError) return error(400, err.message)
     return error(500, 'Update failed')
   }
 }
 
-export async function PATCH(req: NextRequest) {
-  if (!(await requireScimAuth(req))) {
-    return error(401, 'Invalid or missing SCIM bearer token')
-  }
-
-  // Extract user ID from the URL path
-  const pathParts = req.nextUrl.pathname.split('/').filter(Boolean)
-  const userId = pathParts[pathParts.length - 1]
-
-  // If it's a direct user ID, try get; otherwise list
-  if (userId && userId !== 'Users') {
-    try {
-      const body = await req.json()
-      const user = await scimPatchUser(userId, body.Operations ?? body.operations ?? [])
-      if (!user) return error(404, 'User not found')
-      return NextResponse.json(user)
-    } catch {
-      return error(500, 'Patch failed')
-    }
-  }
-
-  return error(400, 'User ID required in URL path')
+// PATCH and DELETE on /Users (no id segment) are not standard SCIM.
+// Standard clients target /Users/<id> — handled by app/api/scim/v2/Users/[id]/route.ts.
+export async function PATCH() {
+  return error(400, 'PATCH must target /Users/{id}')
 }
 
-export async function DELETE(req: NextRequest) {
-  if (!(await requireScimAuth(req))) {
-    return error(401, 'Invalid or missing SCIM bearer token')
-  }
-
-  const pathParts = req.nextUrl.pathname.split('/').filter(Boolean)
-  const userId = pathParts[pathParts.length - 1]
-
-  if (!userId || userId === 'Users') {
-    return error(400, 'User ID required in URL path')
-  }
-
-  const deleted = await scimDeleteUser(userId)
-  if (!deleted) return error(404, 'User not found')
-
-  const { writeAudit } = await import('@/lib/audit')
-  await writeAudit({
-    action: 'SCIM_USER_DEPROVISIONED',
-    userId: null,
-    resource: 'User',
-    resourceId: userId,
-  })
-
-  return new NextResponse(null, { status: 204 })
+export async function DELETE() {
+  return error(400, 'DELETE must target /Users/{id}')
 }

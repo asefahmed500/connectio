@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { verifyMfaToken } from '@/lib/auth/tokens'
+import { Card, CardContent } from '@/components/ui/card'
 import { TwoFactorForm } from './two-factor-form'
 
 export const metadata = { title: 'Two-factor authentication — ClientConnect' }
@@ -28,9 +29,11 @@ export default async function TwoFactorPage({
             Verify it&rsquo;s you to continue.
           </p>
         </div>
-        <div className="rounded-lg border p-6">
-          <TwoFactorForm next={next} />
-        </div>
+        <Card>
+          <CardContent className="p-6">
+            <TwoFactorForm next={next} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
